@@ -18,33 +18,39 @@ notesID3 = col.find_notes("note:Cloze")
 notesID = list(set(notesID2).intersection(set(notesID)).intersection(set(notesID3)))
 
 models = col.models
-
+ 
 modelID = models.get_single_notetype_of_notes(notesID)
     
 # Create new note type
-newNote = models.new("Tour de France")
+new_note_type = models.new("Tour de France")
 
 new_fields = ["Tour de France Winner","Year","Extra"]
 
 for field in new_fields:
     fieldDict = models.new_field(field)
-    models.add_field(newNote, fieldDict)
+    models.add_field(new_note_type, fieldDict)
     
 # Add template
 template = models.new_template("Who is the winner")
-models.add_template(newNote,template)
+models.add_template(new_note_type,template)
 
-models.save(newNote)
+new_note_type["tmpls"][0]["qfmt"] = "{{Tour de France Winner}} is the winner of which year's Tour de France ?"
+new_note_type["tmpls"][0]["afmt"] = "{{Year}}"
+
+
+models.save(new_note_type)
 
 # Change the note type
-fmap = {"Text":"Winner","Extra":"Extra"}
+fmap = {"Text":"Tour de France Winner","Extra":"Extra"}
 
-# models.change( modelID, notesID, newNote, fmap,cmap=None)
+print(col.get_note(notesID[0]).mid==modelID)
 
-change_nt_info = models.change_notetype_info(modelID, newNote.mid)
+models.change( models.get(modelID), notesID, new_note_type, fmap,cmap=None)
 
-input = ChangeNotetypeRequest()
-input.ParseFromString(change_nt_info)
-input.note_ids.extend([...])
+col.update_notes([col.get_note(noteID) for noteID in notesID])
 
-models.change_notetype_of_notes(input)
+print(col.get_note(notesID[0]).mid==modelID)
+
+col.close()
+
+print("ok")

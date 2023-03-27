@@ -1,56 +1,84 @@
 from anki_utils import COL_PATH
-
-# from ankipandas import Collection, set_debug_log_level
-# set_debug_log_level()
-
 from anki.collection import Collection
-from anki.models import ChangeNotetypeRequest
-
-col = Collection(COL_PATH+"collectionUser1 - Copie.anki2")
-
-print(col)
 
 
-# Get the notes to edit
-notesID = col.find_notes("year}} Tour de France")
-notesID2 = col.find_notes("won the")
-notesID3 = col.find_notes("note:Cloze")
-notesID = list(set(notesID2).intersection(set(notesID)).intersection(set(notesID3)))
 
-models = col.models
- 
-modelID = models.get_single_notetype_of_notes(notesID)
+def find_notes_to_change(*to_search: tuple[str]) -> list[int]:
+    # Get the notes to edit
+    notesID = col.find_notes("note:Cloze")
+    for string in to_search:
+        notesID_search = col.find_notes(string)
+        notesID = list( set(notesID_search).intersection(set(notesID)) )
+
+    return notesID
+
+
+def create_note_type(models,
+                     note_name:str,
+                     new_fields:list[str]) -> dict:
+    """_summary_
+
+    Args:
+        models (_type_): _description_
+        note_name (str): _description_
+        new_fields (list[str]): The first one is used in the question side of the created template. The second one for the back. Please go back to Anki GUI to edit the card template
+    """
+    # Create new note type
+    new_note_type = models.new(note_name)
+
+    for field in new_fields:
+        fieldDict = models.new_field(field)
+        models.add_field(new_note_type, fieldDict)
+        
+    # Add template
+    template = models.new_template("Who is the winner")
+    models.add_template(new_note_type,template)
+
+    new_note_type["tmpls"][0]["qfmt"] = f"{{{new_fields[0]}}}"
+    new_note_type["tmpls"][0]["afmt"] = f"{{{new_fields[1]}}}"
+
+    models.save(new_note_type)
     
-# Create new note type
-new_note_type = models.new("Tour de France")
-
-new_fields = ["Tour de France Winner","Year","Extra"]
-
-for field in new_fields:
-    fieldDict = models.new_field(field)
-    models.add_field(new_note_type, fieldDict)
+    return new_note_type
     
-# Add template
-template = models.new_template("Who is the winner")
-models.add_template(new_note_type,template)
 
-new_note_type["tmpls"][0]["qfmt"] = "{{Tour de France Winner}} is the winner of which year's Tour de France ?"
-new_note_type["tmpls"][0]["afmt"] = "{{Year}}"
+def change_note_type(col, 
+                     old_note_type: dict,
+                     new_note_type: dict,
+                     notesID: list[int],
+                     field_mapping_list: list[str] ):
+    # Change the note type
+    models = col.models
+    
+    if len(field_mapping_list)<2:
+        raise ValueError("You must map at least two fields")
+    
+    fmap = {"Text": field_mapping_list[0],"Extra":field_mapping_list[1]}
+
+    models.change( old_note_type, notesID, new_note_type, fmap,cmap=None)
+    col.update_notes([col.get_note(noteID) for noteID in notesID])
+
+    col.close()
+    
+
+def cloze2Basic(new_type_name, 
+                new_fields,
+                *to_search):
+    col = Collection(COL_PATH+"collectionUser1 - Copie.anki2")
+
+    notesID = find_notes_to_change(to_search)
+
+    models = col.models
+    modelID = models.get_single_notetype_of_notes(notesID)
+
+    new_note_type = create_note_type(models, new_type_name, new_fields)
+
+    new_fields_mapping = [new_fields[0],new_fields[2]]
+    change_note_type(col,models.get(modelID), new_note_type, notesID, new_fields_mapping)
 
 
-models.save(new_note_type)
+new_type_name = "Tour de France Winners"
+new_fields = ["Tour de France winner","Year","Extra"]
+to_search = ("year}} Tour de France","won the")
 
-# Change the note type
-fmap = {"Text":"Tour de France Winner","Extra":"Extra"}
-
-print(col.get_note(notesID[0]).mid==modelID)
-
-models.change( models.get(modelID), notesID, new_note_type, fmap,cmap=None)
-
-col.update_notes([col.get_note(noteID) for noteID in notesID])
-
-print(col.get_note(notesID[0]).mid==modelID)
-
-col.close()
-
-print("ok")
+cloze2Basic(new_type_name,new_fields,to_search)

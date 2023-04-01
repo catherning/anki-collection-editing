@@ -3,14 +3,15 @@ from anki.collection import Collection
 
 
 
-def find_notes_to_change(*to_search: tuple[str]) -> list[int]:
+def find_notes_to_change(col,
+                         query: str) -> list[int]:
     # Get the notes to edit
-    notesID = col.find_notes("note:Cloze")
-    for string in to_search:
-        notesID_search = col.find_notes(string)
-        notesID = list( set(notesID_search).intersection(set(notesID)) )
+    query  = query + " note:Cloze"
+    # for string in to_search:
+    notesID = col.find_notes(query)
+    # notesID = list( set(notesID_search).intersection(set(notesID)) )
 
-    return notesID
+    return list(notesID)
 
 
 def create_note_type(models,
@@ -32,10 +33,10 @@ def create_note_type(models,
         
     # Add template
     template = models.new_template("Who is the winner")
-    models.add_template(new_note_type,template)
 
-    new_note_type["tmpls"][0]["qfmt"] = f"{{{new_fields[0]}}}"
-    new_note_type["tmpls"][0]["afmt"] = f"{{{new_fields[1]}}}"
+    models.add_template(new_note_type,template)
+    new_note_type["tmpls"][0]["qfmt"] = "{{%s}}" % (new_fields[0])
+    new_note_type["tmpls"][0]["afmt"] = "{{%s}}" % (new_fields[1])
 
     models.save(new_note_type)
     
@@ -63,10 +64,10 @@ def change_note_type(col,
 
 def cloze2Basic(new_type_name, 
                 new_fields,
-                *to_search):
+                query):
     col = Collection(COL_PATH+"collectionUser1 - Copie.anki2")
 
-    notesID = find_notes_to_change(to_search)
+    notesID = find_notes_to_change(col,query)
 
     models = col.models
     modelID = models.get_single_notetype_of_notes(notesID)
@@ -77,8 +78,10 @@ def cloze2Basic(new_type_name,
     change_note_type(col,models.get(modelID), new_note_type, notesID, new_fields_mapping)
 
 
-new_type_name = "Tour de France Winners"
-new_fields = ["Tour de France winner","Year","Extra"]
-to_search = ("year}} Tour de France","won the")
+new_type_name = "Olympic winners"
+new_fields = ["Winner","Year","Extra"]
+query = '"Olympics" "won"'
 
-cloze2Basic(new_type_name,new_fields,to_search)
+cloze2Basic(new_type_name, new_fields, query)
+
+# TODO: get the new info using regex

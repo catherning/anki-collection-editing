@@ -1,12 +1,27 @@
 from anki_utils import COL_PATH
 from anki.collection import Collection
+from anki.models import NotetypeDict, ModelManager
 
 import re
 from loguru import logger
 
-def find_notes_to_change(col,
+def find_notes_to_change(col: Collection,
                          query: str,
                          cloze_type_name: str = "Cloze") -> list[int]:
+    """Retrieves the notes to change according to a query.
+
+    Args:
+        col (Collection): The full Anki collection with all models and notes
+        query (str): The query to use to match the pattern of the cards to change
+        cloze_type_name (str, optional): The name of the Cloze note type. Defaults to "Cloze".
+
+    Raises:
+        ValueError: If the query or cloze note type name is wrong and no note was found 
+
+    Returns:
+        list[int]: The list of the IDs of the notes to convert
+    """
+    
     # Get the notes to edit
     new_query  = query + f' note:"{cloze_type_name}"'
     notesID = col.find_notes(new_query)
@@ -18,37 +33,42 @@ def find_notes_to_change(col,
         for note in notesID:
             logger.info(col.get_note(note).fields[0])
         print("Proceed ? (y/n)")
-        # if input()!="y":
-        #     exit() 
+        if input()!="y":
+            exit() 
     return list(notesID)
 
 
-def create_note_type(models,
+def create_note_type(col: Collection,
                      note_name:str,
                      new_fields:list[str],
-                     original_field_list) -> dict:
-    """_summary_
+                     original_field_list: list[str]) -> NotetypeDict:
+    """Creates the new note type and the card templates
 
     Args:
-        models (_type_): _description_
-        note_name (str): _description_
-        new_fields (list[str]): The first one is used in the question side of the created template. The second one for the back. Please go back to Anki GUI to edit the card template
+        col (Collection): The full Anki collection with all models and notes
+        note_name (str): The name of the new note
+        new_fields (list[str]): The list of new field names and the information on how to fill it
+        original_field_list (list[str]): The list of 
+
+    Returns:
+        NotetypeDict: The new note type dictionary
     """
     # Create new note type
+    models = col.models
     new_note_type = models.new(note_name)
 
     for i,field_info in enumerate(new_fields):
         fieldDict = models.new_field(field_info[0])
         models.add_field(new_note_type, fieldDict)
         
-        if field_info[1] in original_field_list:
+        if field_info[1] not in original_field_list:
             # Add template
             template = models.new_template(f"Answer: {field_info[0]}")
 
             models.add_template(new_note_type,template)
 
             new_note_type["tmpls"][i]["qfmt"] = "{{%s}}" % (new_fields[(i+1)%len(new_fields)][0])
-            new_note_type["tmpls"][i]["afmt"] = "{{%s}}" % (new_fields[i][0])
+            new_note_type["tmpls"][i]["afmt"] = "{{%s}}" % (field_info[0])
 
     models.save(new_note_type)
     
@@ -77,9 +97,6 @@ def change_note_type(col,
         except IndexError:
             logger.info(f"Target field {field_info[0]} will be mapped from nothing for the note type conversion step. (Original field / regex: '{field_info[1]}')")
     
-    # TODO: transpose cards info onto the new cards
-    cards = col.get_note(notesID[3]).cards()
-    
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
     
 
@@ -92,19 +109,16 @@ def extract_info_from_cloze(col,
         field_to_extract = -1
     else:
         text_field = [(f_info,i) for i,f_info in enumerate(new_fields) if f_info[2]=="Text"][0]
-        # logger.warning(f"The field {text_field[0][0]} that was mapped from the cloze text field might be replaced with the matched pattern {text_field[0][1]} in the given regex")
         field_to_extract = text_field[1]
     
     
-            
+    notes = []
     for noteID in notesID:
         note = col.get_note(noteID)
-        for i,(target_field,regex) in enumerate(new_fields): # Could use last value to see if it's a regex / cloze extraction
-            if regex in original_field_list:
-                # the content was already copied with fmap during the note conversion
-                continue
-            else:
-                regex = "\{\{c"+str(i+1)+"::([^}:]*):?:?.*\}\}$"
+        for i,(target_field,field_origin) in enumerate(new_fields): # Could use last value to see if it's a regex / cloze extraction
+            if field_origin not in original_field_list:
+                regex = "\{\{%s::([^}:]*):?:?.*\}\}" % (field_origin)
+                # TODO: include case when there's several cloze for one card (ex: several {{c1::...}}) => to put in different fields
                 # https://regex101.com/r/usAlIw/1
                 p = re.compile(regex)
                 m = p.search(note.fields[field_to_extract])
@@ -116,7 +130,12 @@ def extract_info_from_cloze(col,
                     # TODO: give the list of the notes with incorrect transformation and continue the process
 
         logger.info(f"Final fields of the note: {note.fields}")
-        col.update_note(note)
+        notes.append(note)
+        
+    logger.info("Confirm the mappings and save notes ? (yes/no)")
+    if input()=="yes":
+        col.update_notes(notes)
+        
             
 
 def cloze2Basic(query: str,
@@ -140,27 +159,26 @@ def cloze2Basic(query: str,
         # TODO: allow for another name than Text where there is the cloze ?
         if not [el for el in new_fields if "Text" in el[1]]:
             new_fields.append(("Original cloze text","Text"))
-            # Or copy "Text" to all target fields ?
         
         # Resume a conversion if the new type was already created before
         new_note_type = models.by_name(new_type_name) 
         if new_note_type is None:
-            new_note_type = create_note_type(models, new_type_name, new_fields,original_field_list)
+            new_note_type = create_note_type(col, new_type_name, new_fields,original_field_list)
         
         change_note_type(col,original_model, new_note_type, notesID, new_fields)
     
     extract_info_from_cloze(col,notesID,new_fields,original_field_list)
 
     col.close()
+    logger.success("New notes created and saved in the collection!")
 
 
-new_type_name = "Olympic winners 2"
-original_type_name = "Cloze" #Music & Sport"
-# (new_field_name, regex to fill it with data OR the original field for mapping transferring (can't copy original field to several target fields. Make it possible ?))
-new_fields = [("Winner" , "\{\{c\d::(\D+)::who\?\}\}"), # By default : regex to capture what's inside a cloze
-              ("Year"   , "\{\{c\d::(\d{4}).*\}\}"),
-              ("Extra"  , "Extra")] 
-query = '"Olympics" "won"'
+new_type_name = "Tour de France Winners"
+original_type_name = "Cloze Music & Sport"
+new_fields = [("Winner" , "c1"),
+              ("Year"   , "c2"),
+              ("Extra"  , "Back Extra")] 
+query = '"Tour de France" "won the {{c2"'
 
 cloze2Basic(query, new_type_name, new_fields,original_type_name)
 

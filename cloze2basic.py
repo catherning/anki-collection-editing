@@ -5,6 +5,16 @@ from anki.models import NotetypeDict, ModelManager
 import re
 from loguru import logger
 
+def proceed():
+    print("Proceed ? (Y/n)")
+    a = input()
+    if a=="y":
+        logger.info("Please write 'Y' if you want to proceed.")
+        a=input()
+    if a!="Y":
+        logger.info("Stopping prematurely at the user's request")
+        exit() 
+
 def find_notes_to_change(col: Collection,
                          query: str,
                          cloze_type_name: str = "Cloze") -> list[int]:
@@ -32,9 +42,7 @@ def find_notes_to_change(col: Collection,
         logger.info(f"Number of notes found: {len(notesID)}")
         for note in notesID:
             logger.info(col.get_note(note).fields[0])
-        print("Proceed ? (y/n)")
-        if input()!="y":
-            exit() 
+        proceed()
     return list(notesID)
 
 
@@ -87,7 +95,6 @@ def change_note_type(col,
     
     fmap = dict()
     cloze_fields = old_note_type["flds"]
-
     
     for i, field_info in enumerate(field_mapping_list):
         try:
@@ -95,8 +102,12 @@ def change_note_type(col,
             fmap[[f_info["ord"] for f_info in cloze_fields if field_info[1] == f_info["name"]][0]] = i
             logger.info(f"Target field {field_info[0]} will be mapped from the field '{field_info[1]}'")
         except IndexError:
-            logger.info(f"Target field {field_info[0]} will be mapped from nothing for the note type conversion step. (Original field / regex: '{field_info[1]}')")
-    
+            if re.compile("c\d").search(field_info[1]):
+                logger.info(f"Target field {field_info[0]} will extract the {field_info[1]} cloze field")
+            else:
+                logger.warning(f"Field not found. Wrong field name: '{field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
+                logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in cloze_fields]}")
+    proceed()
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
     
 
@@ -126,15 +137,20 @@ def extract_info_from_cloze(col,
                     note.fields[i] =  m.group(1)
                 else:
                     logger.error(f"Cloze text: '{note.fields[field_to_extract]}'")
-                    raise Exception(f"Regex {regex} incorrect. Information to put in {target_field=} not found.")
+                    raise Exception(f"Regex {regex} incorrect. Information to put in {target_field=} not found. Maybe the original field name was wrong?")
                     # TODO: give the list of the notes with incorrect transformation and continue the process
 
-        logger.info(f"Final fields of the note: {note.fields}")
+        logger.info(f"Final fields of the note: {[fld[:30]+'...' if len(fld)>33 else fld for fld in note.fields]}")
         notes.append(note)
         
-    logger.info("Confirm the mappings and save notes ? (yes/no)")
-    if input()=="yes":
+    logger.info("Confirm the mappings and save notes ? (Y/n)")
+    if input()=="Y":
         col.update_notes(notes)
+        logger.success("New notes created and saved in the collection!")
+    else:
+        # TODO: handle in this case, how do we resume ? The notes were already converted, we just need to extract the info again
+        logger.warning("The note field extraction was not saved. But the notes were already converted.")
+    col.close()
         
             
 
@@ -167,18 +183,17 @@ def cloze2Basic(query: str,
         
         change_note_type(col,original_model, new_note_type, notesID, new_fields)
     
+    # TODO: handle resuming an extraction where the notes were already converted and the "Original cloze text" field has the text
     extract_info_from_cloze(col,notesID,new_fields,original_field_list)
 
-    col.close()
-    logger.success("New notes created and saved in the collection!")
 
 
-new_type_name = "Tour de France Winners"
-original_type_name = "Cloze Music & Sport"
-new_fields = [("Winner" , "c1"),
-              ("Year"   , "c2"),
+new_type_name = "Olympic winners"
+original_type_name = "Olympic winners" #"Cloze Music & Sport"
+new_fields = [("Winner" , "c2"),
+              ("Year"   , "c3"),
               ("Extra"  , "Back Extra")] 
-query = '"Tour de France" "won the {{c2"'
+query = 'Olympic "won {{c1"'
 
 cloze2Basic(query, new_type_name, new_fields,original_type_name)
 

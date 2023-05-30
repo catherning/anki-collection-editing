@@ -87,25 +87,27 @@ def change_note_type(col,
                      old_note_type: dict,
                      new_note_type: dict,
                      notesID: list[int],
-                     field_mapping_list: list[str] ):
+                     new_fields: list[str] ):
     # Change the note type
 
-    if len(field_mapping_list)<2:
+    if len(new_fields)<2:
         raise ValueError("You must map at least two fields")
     
     fmap = dict()
     cloze_fields = old_note_type["flds"]
     
-    for i, field_info in enumerate(field_mapping_list):
+    for target_field_info in new_fields:
         try:
             # Map the ordinal position of the original field to the ordinal position (f_info["ord"]) of the target field (i)
-            fmap[[f_info["ord"] for f_info in cloze_fields if field_info[1] == f_info["name"]][0]] = i
-            logger.info(f"Target field {field_info[0]} will be mapped from the field '{field_info[1]}'")
-        except IndexError:
-            if re.compile("c\d").search(field_info[1]):
-                logger.info(f"Target field {field_info[0]} will extract the {field_info[1]} cloze field")
+            target_ord = next(filter(lambda field: target_field_info[0] == field['name'], new_note_type["flds"]))["ord"]
+            original_ord = [original_field_info["ord"] for original_field_info in cloze_fields if target_field_info[1] == original_field_info["name"]][0]
+            fmap[original_ord] = target_ord
+            logger.info(f"Target field {target_field_info[0]} will be mapped from the field '{target_field_info[1]}'")
+        except IndexError: # When taking the index 0 of empty list
+            if re.compile("c\d").search(target_field_info[1]):
+                logger.info(f"Target field {target_field_info[0]} will extract the {target_field_info[1]} cloze field")
             else:
-                logger.warning(f"Field not found. Wrong field name: '{field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
+                logger.warning(f"Field not found. Wrong field name: '{target_field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
                 logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in cloze_fields]}")
     proceed()
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
@@ -188,12 +190,13 @@ def cloze2Basic(query: str,
 
 
 
-new_type_name = "Olympic winners"
-original_type_name = "Olympic winners" #"Cloze Music & Sport"
+new_type_name = "Olympic winners bis"
+original_type_name = "Olympic winners bis" #"Cloze" #"Cloze Music & Sport"
 new_fields = [("Winner" , "c2"),
               ("Year"   , "c3"),
-              ("Extra"  , "Back Extra")] 
-query = 'Olympic "won {{c1"'
+              ("Race","c1"),
+              ("Extra"  , "Extra")] 
+query = 'Olympic "won {{c2" "at {{c1"'
 
 cloze2Basic(query, new_type_name, new_fields,original_type_name)
 

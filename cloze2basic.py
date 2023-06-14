@@ -5,6 +5,8 @@ from anki.models import NotetypeDict, ModelManager
 import re
 from loguru import logger
 
+CLOZE_TYPE = 1
+
 def proceed():
     print("Proceed ? (Y/n)")
     a = input()
@@ -15,9 +17,13 @@ def proceed():
         logger.info("Stopping prematurely at the user's request")
         exit() 
 
+def truncate_field(field):
+    return field[:30]+'...' if len(field)>33 else field
+
 def find_notes_to_change(col: Collection,
                          query: str,
-                         cloze_type_name: str = "Cloze") -> list[int]:
+                         cloze_type_name: str = "Cloze",
+                         cloze_text_field="Text") -> tuple[list[int],int]: 
     """Retrieves the notes to change according to a query.
 
     Args:
@@ -40,17 +46,24 @@ def find_notes_to_change(col: Collection,
         raise ValueError("No notes found. Please review your query and cloze note type")
     else:
         logger.info(f"Number of notes found: {len(notesID)}")
+        original_modelID = col.models.get_single_notetype_of_notes(notesID)
+        original_model = col.models.get(original_modelID)
         for note in notesID:
-            logger.info(col.get_note(note).fields[0])
+            note_details = col.get_note(note)
+            cloze_text_index = note_details._fmap[cloze_text_field][1]["ord"]
+            logger.info(note_details.fields[cloze_text_index])
+            for k,field in enumerate(note_details.fields):
+                if original_model["type"]!= CLOZE_TYPE and field !="" and k!=cloze_text_index:
+                    logger.warning(f'Field of the basic note is not empty and the text "{truncate_field(field)}" might be replaced')
         proceed()
-    return list(notesID)
+    return list(notesID), original_model
 
 
 def create_note_type(col: Collection,
                      note_name:str,
                      new_fields:list[str],
                      original_field_list: list[str]) -> NotetypeDict:
-    """Creates the new note type and the card templates
+    """Creates the new note type and the card templates.
 
     Args:
         col (Collection): The full Anki collection with all models and notes
@@ -107,22 +120,25 @@ def change_note_type(col,
             if re.compile("c\d").search(target_field_info[1]):
                 logger.info(f"Target field {target_field_info[0]} will extract the {target_field_info[1]} cloze field")
             else:
-                logger.warning(f"Field not found. Wrong field name: '{target_field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
+                logger.error(f"Field not found. Wrong field name: '{target_field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
                 logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in cloze_fields]}")
     proceed()
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
+    logger.warning("The notes were converted even if the extraction is not validated.")
     
 
 def extract_info_from_cloze(col,
                             notesID,
+                            new_note_type,
                             new_fields,
-                            original_field_list):
+                            original_field_list,
+                            cloze_text_field="Text"):
 
     if "Original cloze text"==new_fields[-1][0]:
-        field_to_extract = -1
+        field_to_extract_index = -1
     else:
-        text_field = [(f_info,i) for i,f_info in enumerate(new_fields) if f_info[2]=="Text"][0]
-        field_to_extract = text_field[1]
+        field_to_extract_index = list(filter(lambda field: field["name"] == cloze_text_field, new_note_type["flds"]))[0]["ord"]
+
     
     
     notes = []
@@ -134,15 +150,15 @@ def extract_info_from_cloze(col,
                 # TODO: include case when there's several cloze for one card (ex: several {{c1::...}}) => to put in different fields
                 # https://regex101.com/r/usAlIw/1
                 p = re.compile(regex)
-                m = p.search(note.fields[field_to_extract])
+                m = p.search(note.fields[field_to_extract_index])
                 if m:
                     note.fields[i] =  m.group(1)
                 else:
-                    logger.error(f"Cloze text: '{note.fields[field_to_extract]}'")
+                    logger.error(f"Cloze text: '{note.fields[field_to_extract_index]}'")
                     raise Exception(f"Regex {regex} incorrect. Information to put in {target_field=} not found. Maybe the original field name was wrong?")
                     # TODO: give the list of the notes with incorrect transformation and continue the process
 
-        logger.info(f"Final fields of the note: {[fld[:30]+'...' if len(fld)>33 else fld for fld in note.fields]}")
+        logger.info(f"Final fields of the note: {[truncate_field(fld) for fld in note.fields]}")
         notes.append(note)
         
     logger.info("Confirm the mappings and save notes ? (Y/n)")
@@ -150,7 +166,6 @@ def extract_info_from_cloze(col,
         col.update_notes(notes)
         logger.success("New notes created and saved in the collection!")
     else:
-        # TODO: handle in this case, how do we resume ? The notes were already converted, we just need to extract the info again
         logger.warning("The note field extraction was not saved. But the notes were already converted.")
     col.close()
         
@@ -160,45 +175,44 @@ def cloze2Basic(query: str,
                 new_type_name: str = None, 
                 new_fields: list[any] = None,
                 original_type_name = "Cloze",
+                cloze_text_field = "Text"
                 ):
     col = Collection(COL_PATH+"collection.anki2")
 
-    notesID = find_notes_to_change(col,query, original_type_name)
-
-    models = col.models
-    original_modelID = models.get_single_notetype_of_notes(notesID)
-    original_model = models.get(original_modelID)
+    notesID, original_model = find_notes_to_change(col,query, original_type_name,cloze_text_field)
+    
     original_field_list = [fld["name"] for fld in original_model["flds"]]
 
     # If model is of type Cloze, we do the conversion, otherwise we just do the regex extraction
-    if original_model["type"]==1 : 
+    if original_model["type"] == CLOZE_TYPE : 
         
         # If the user doesn't map the Text field to a target field, we do it
-        # TODO: allow for another name than Text where there is the cloze ?
-        if not [el for el in new_fields if "Text" in el[1]]:
-            new_fields.append(("Original cloze text","Text"))
+        if not [el for el in new_fields if cloze_text_field in el[1]]:
+            new_fields.append(("Original cloze text",cloze_text_field))
         
         # Resume a conversion if the new type was already created before
-        new_note_type = models.by_name(new_type_name) 
+        new_note_type = col.models.by_name(new_type_name) 
         if new_note_type is None:
             new_note_type = create_note_type(col, new_type_name, new_fields,original_field_list)
         
         change_note_type(col,original_model, new_note_type, notesID, new_fields)
+    else:
+        new_note_type = original_model
     
-    # TODO: handle resuming an extraction where the notes were already converted and the "Original cloze text" field has the text
-    extract_info_from_cloze(col,notesID,new_fields,original_field_list)
+    extract_info_from_cloze(col,notesID,new_note_type,new_fields,original_field_list,cloze_text_field)
 
 
 
-new_type_name = "Olympic winners bis"
-original_type_name = "Olympic winners bis" #"Cloze" #"Cloze Music & Sport"
-new_fields = [("Winner" , "c2"),
-              ("Year"   , "c3"),
-              ("Race","c1"),
-              ("Extra"  , "Extra")] 
-query = 'Olympic "won {{c2" "at {{c1"'
+new_type_name = "Olympic winners"
+original_type_name = "Olympic winners" #"Cloze Music & Sport" # "Olympic winners bis"
+new_fields = [("Winner" , "c1"),
+              ("Year"   , "c2"),
+              #("Extra"  , "Back Extra")
+              ] 
+query = '"won the" "Olympics"'
+cloze_text_field="Original cloze text" # "Text"
 
-cloze2Basic(query, new_type_name, new_fields,original_type_name)
+cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)
 
 
 # FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?

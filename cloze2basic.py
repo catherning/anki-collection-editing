@@ -58,6 +58,9 @@ def find_notes_to_change(col: Collection,
         proceed()
     return list(notesID), original_model
 
+def add_field(col,new_note_type,field):
+    fieldDict = col.models.new_field(field)
+    col.models.add_field(new_note_type, fieldDict)
 
 def create_note_type(col: Collection,
                      note_name:str,
@@ -79,9 +82,8 @@ def create_note_type(col: Collection,
     new_note_type = models.new(note_name)
 
     for i,field_info in enumerate(new_fields):
-        fieldDict = models.new_field(field_info[0])
-        models.add_field(new_note_type, fieldDict)
-        
+        add_field(col,new_note_type,field_info[0])
+
         if field_info[1] not in original_field_list:
             # Add template
             template = models.new_template(f"Answer: {field_info[0]}")
@@ -107,13 +109,13 @@ def change_note_type(col,
         raise ValueError("You must map at least two fields")
     
     fmap = dict()
-    cloze_fields = old_note_type["flds"]
+    original_fields = old_note_type["flds"]
     
     for target_field_info in new_fields:
         try:
-            # Map the ordinal position of the original field to the ordinal position (f_info["ord"]) of the target field (i)
+            # Map the ordinal position of the original field to the ordinal position (f_info["ord"]) of the target field 
             target_ord = next(filter(lambda field: target_field_info[0] == field['name'], new_note_type["flds"]))["ord"]
-            original_ord = [original_field_info["ord"] for original_field_info in cloze_fields if target_field_info[1] == original_field_info["name"]][0]
+            original_ord = [original_field_info["ord"] for original_field_info in original_fields if target_field_info[1] == original_field_info["name"]][0]
             fmap[original_ord] = target_ord
             logger.info(f"Target field {target_field_info[0]} will be mapped from the field '{target_field_info[1]}'")
         except IndexError: # When taking the index 0 of empty list
@@ -121,12 +123,16 @@ def change_note_type(col,
                 logger.info(f"Target field {target_field_info[0]} will extract the {target_field_info[1]} cloze field")
             else:
                 logger.error(f"Field not found. Wrong field name: '{target_field_info[1]}'. Please restart the script with the correct field name or proceed. The field will be empty")
-                logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in cloze_fields]}")
+                logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in original_fields]}")
+        except StopIteration:
+            # Should not happen as we create the missing fields before
+            logger.errror(f"Field {target_field_info[0]} is not present in new note type. It will be created")
+
+            
     proceed()
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
     logger.warning("The notes were converted even if the extraction is not validated.")
     
-
 def extract_info_from_cloze(col,
                             notesID,
                             new_note_type,
@@ -195,6 +201,12 @@ def cloze2Basic(query: str,
         if new_note_type is None:
             new_note_type = create_note_type(col, new_type_name, new_fields,original_field_list)
         
+        missing_fields = set(field[0] for field in new_fields) - set(field["name"] for field in new_note_type["flds"])
+        for field in missing_fields:
+            logger.warning(f"Creation of the field '{field}' which is not present in new note type")
+            add_field(col, new_note_type, field)
+        col.models.save(new_note_type)
+        
         change_note_type(col,original_model, new_note_type, notesID, new_fields)
     else:
         new_note_type = original_model
@@ -202,17 +214,18 @@ def cloze2Basic(query: str,
     extract_info_from_cloze(col,notesID,new_note_type,new_fields,original_field_list,cloze_text_field)
 
 
-
-new_type_name = "Olympic winners"
-original_type_name = "Olympic winners" #"Cloze Music & Sport" # "Olympic winners bis"
-new_fields = [("Winner" , "c1"),
+# TODO: when code is correct, use args instead (don't need to debug) 
+new_type_name = "Litterature"
+original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
+new_fields = [("Book" , "c3"),
               ("Year"   , "c2"),
-              #("Extra"  , "Back Extra")
+              ("Author"   , "c1"),
+              ("Extra"  , "Extra")
               ] 
-query = '"won the" "Olympics"'
-cloze_text_field="Original cloze text" # "Text"
+query = 'Ernest Hemingway wrote'
+cloze_text_field= "Text" #"Original cloze text" # 
 
 cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)
 
 
-# FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?
+# FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?s

@@ -1,28 +1,17 @@
-from anki_utils import COL_PATH
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
 
 import re
 from loguru import logger
+from anki_utils import COL_PATH
+from utils import CLOZE_TYPE, proceed, truncate_field, add_field
 
-CLOZE_TYPE = 1
 
-def proceed():
-    print("Proceed ? (Y/n)")
-    a = input()
-    if a=="y":
-        logger.info("Please write 'Y' if you want to proceed.")
-        a=input()
-    if a!="Y":
-        logger.info("Stopping prematurely at the user's request")
-        exit() 
-
-def truncate_field(field):
-    return field[:30]+'...' if len(field)>33 else field
 
 def find_notes_to_change(col: Collection,
                          query: str,
                          cloze_type_name: str = "Cloze",
+                         verbose = True,
                          cloze_text_field="Text") -> tuple[list[int],int]: 
     """Retrieves the notes to change according to a query.
 
@@ -50,17 +39,17 @@ def find_notes_to_change(col: Collection,
         original_model = col.models.get(original_modelID)
         for note in notesID:
             note_details = col.get_note(note)
-            cloze_text_index = note_details._fmap[cloze_text_field][1]["ord"]
-            logger.info(note_details.fields[cloze_text_index])
-            for k,field in enumerate(note_details.fields):
-                if original_model["type"]!= CLOZE_TYPE and field !="" and k!=cloze_text_index:
-                    logger.warning(f'Field of the basic note is not empty and the text "{truncate_field(field)}" might be replaced')
+            
+            if verbose:
+                cloze_text_index = note_details._fmap[cloze_text_field][1]["ord"]
+                logger.info(note_details.fields[cloze_text_index])
+                for k,field in enumerate(note_details.fields):
+                    if original_model["type"]!= CLOZE_TYPE and field !="" and k!=cloze_text_index:
+                        logger.warning(f'Field of the basic note is not empty and the text "{truncate_field(field)}" might be replaced')
         proceed()
     return list(notesID), original_model
 
-def add_field(col,new_note_type,field):
-    fieldDict = col.models.new_field(field)
-    col.models.add_field(new_note_type, fieldDict)
+
 
 def create_note_type(col: Collection,
                      note_name:str,
@@ -162,7 +151,6 @@ def extract_info_from_cloze(col,
                 else:
                     logger.error(f"Cloze text: '{note.fields[field_to_extract_index]}'")
                     raise Exception(f"Regex {regex} incorrect. Information to put in {target_field=} not found. Maybe the original field name was wrong?")
-                    # TODO: give the list of the notes with incorrect transformation and continue the process
 
         logger.info(f"Final fields of the note: {[truncate_field(fld) for fld in note.fields]}")
         notes.append(note)
@@ -186,6 +174,7 @@ def cloze2Basic(query: str,
     col = Collection(COL_PATH+"collection.anki2")
 
     notesID, original_model = find_notes_to_change(col,query, original_type_name,cloze_text_field)
+    original_parts=html.split('<br/>')
     
     original_field_list = [fld["name"] for fld in original_model["flds"]]
 
@@ -214,18 +203,19 @@ def cloze2Basic(query: str,
     extract_info_from_cloze(col,notesID,new_note_type,new_fields,original_field_list,cloze_text_field)
 
 
-# TODO: when code is correct, use args instead (don't need to debug) 
-new_type_name = "Litterature"
-original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
-new_fields = [("Book" , "c3"),
-              ("Year"   , "c2"),
-              ("Author"   , "c1"),
-              ("Extra"  , "Extra")
-              ] 
-query = 'Ernest Hemingway wrote'
-cloze_text_field= "Text" #"Original cloze text" # 
+if __name__ == "__main__":
+    # TODO: when code is correct, use args instead (don't need to debug) 
+    new_type_name = "Litterature"
+    original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
+    new_fields = [("Book" , "c2"),
+                ("Year"   , "c3"),
+                ("Author"   , "c1"),
+                ("Extra"  , "Extra")
+                ] 
+    query = 'Virginia Woolf novel'
+    cloze_text_field= "Text" #"Original cloze text" # 
 
-cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)
+    cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)
 
 
 # FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?s

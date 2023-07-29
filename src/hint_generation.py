@@ -12,7 +12,7 @@ col = Collection(COL_PATH+"collection.anki2")
 
 note_type_name = "Tour de France"
 
-query = '"Tour de France"'
+query = '"Coldplay"'
 
 flds_in_hint = ["Year","Winner"]
 hint_field = "Extra"

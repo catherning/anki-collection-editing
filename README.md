@@ -5,6 +5,7 @@
 
 # Installation
 
+- Careful: if in WSL, must copy the collection to WSL file system. Refering to the collection in Windows filesystem (`/mnt/c` etc) seems to create an empty collection. TODO: check why. anki library in linux is different?
 
 # TODOs
 - Handle the repetition of cloze field number (several {{c1:...}})

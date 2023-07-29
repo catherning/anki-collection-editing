@@ -6,7 +6,8 @@ from loguru import logger
 from anki_utils import COL_PATH
 from utils import CLOZE_TYPE, proceed, truncate_field, add_field
 
-
+if COL_PATH[-6:]!=".anki2":
+    COL_PATH+="collection.anki2"
 
 def find_notes_to_change(col: Collection,
                          query: str,
@@ -171,10 +172,10 @@ def cloze2Basic(query: str,
                 original_type_name = "Cloze",
                 cloze_text_field = "Text"
                 ):
-    col = Collection(COL_PATH+"collection.anki2")
+
+    col = Collection(COL_PATH)
 
     notesID, original_model = find_notes_to_change(col,query, original_type_name,cloze_text_field)
-    original_parts=html.split('<br/>')
     
     original_field_list = [fld["name"] for fld in original_model["flds"]]
 
@@ -207,12 +208,12 @@ if __name__ == "__main__":
     # TODO: when code is correct, use args instead (don't need to debug) 
     new_type_name = "Litterature"
     original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
-    new_fields = [("Book" , "c2"),
-                ("Year"   , "c3"),
-                ("Author"   , "c1"),
+    new_fields = [("Book" , "c1"),
+                ("Year"   , "c2"),
+                ("Author"   , "c3"),
                 ("Extra"  , "Extra")
                 ] 
-    query = 'Virginia Woolf novel'
+    query = '"Philip Pullman"'
     cloze_text_field= "Text" #"Original cloze text" # 
 
     cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)

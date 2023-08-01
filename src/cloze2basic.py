@@ -206,14 +206,14 @@ def cloze2Basic(query: str,
 
 if __name__ == "__main__":
     # TODO: when code is correct, use args instead (don't need to debug) 
-    new_type_name = "Litterature"
+    new_type_name = "Music"
     original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
-    new_fields = [("Book" , "c1"),
-                ("Year"   , "c2"),
-                ("Author"   , "c3"),
+    new_fields = [("Album" , "c3"),
+                ("Year"   , "c1"),
+                ("Group"   , "c2"),
                 ("Extra"  , "Extra")
                 ] 
-    query = '"Philip Pullman"'
+    query = 'note:Cloze "album by" re:c\d.*c\d.*c\d re:c1::\d "re:by \{\{c2"' # "re:\{\{c1::\d"
     cloze_text_field= "Text" #"Original cloze text" # 
 
     cloze2Basic(query, new_type_name, new_fields, original_type_name,cloze_text_field)

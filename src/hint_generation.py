@@ -7,18 +7,24 @@ from anki_utils import COL_PATH
 from cloze2basic import find_notes_to_change
 
 
-col = Collection(COL_PATH+"collection.anki2")
+col = Collection(COL_PATH)
 
 
-note_type_name = "Tour de France"
+note_type_name = "Litterature"
 
-query = '"Coldplay"'
+query = '"Hemingway"'
+break_lines = False
 
-flds_in_hint = ["Year","Winner"]
+
+# TODO: If cloze: then give the cloze that would be the sorting field and the hint one
+# If basic: give the field
+
+# TODO: Afterwards, for converted cloze to Basic, don't have to filter by using the query, just the note type, AND the field where we have the constant value (ex: Author) to generate the hints
+flds_in_hint = ["Year","Book"]
 hint_field = "Extra"
 
 
-notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=False)
+notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True)
 
 note_hints = []
 for nid in notesID:
@@ -27,26 +33,33 @@ for nid in notesID:
     #TODO: check if all notes have the same type? try if it's already checked. Otherwise, do I need to check note type each time, not above for loop?
     content=""
     for field in flds_in_hint:
-        content += f"{note[field]} |" 
+        content += f"{note[field]} | " 
     note_hints.append(content)
 
 note_hints_sorted = note_hints[:]
-note_hints_sorted.sort()
-note_hints_spaced = []
+note_hints_sorted.sort() # TODO: add sort field ? Now it's just the first field in flds_in_hint
 
-previous_decimal = note_hints_sorted[0][2]
-for i, hint in enumerate(note_hints_sorted):
-    if hint[2]!=previous_decimal:
-        note_hints_spaced.append("")
-    note_hints_spaced.append(hint)
-    previous_decimal = hint[2]
-
+# Specifics to have lines breaks between decades when the sorting field is Year
+if break_lines:
+    note_hints_spaced = []
+    previous_decimal = note_hints_sorted[0][2]
+    for i, hint in enumerate(note_hints_sorted):
+        if hint[2]!=previous_decimal:
+            note_hints_spaced.append("")
+        note_hints_spaced.append(hint)
+        previous_decimal = hint[2]
+    note_hints_sorted = note_hints_spaced
 
 notes = []
 for nid,cur_note_hint in zip(notesID,note_hints):
     note = col.get_note(nid)
-    idx = note_hints_spaced.index(cur_note_hint)
-    hint = "<br>".join(note_hints_spaced[:idx]) + "<br>?<br>" + "<br>".join(note_hints_spaced[idx+1:])
+    idx = note_hints_sorted.index(cur_note_hint)
+    hint = ( "<br>".join(note_hints_sorted[:idx]) + 
+            ("<br>" if idx!=0 else "") + 
+             "?" +
+            ("<br>" if idx!=len(note_hints_sorted)-1 else "") +
+             "<br>".join(note_hints_sorted[idx+1:])
+            )
     note[hint_field] = hint
     notes.append(note)
     

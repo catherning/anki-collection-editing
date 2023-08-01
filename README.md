@@ -10,3 +10,5 @@
 # TODOs
 - Handle the repetition of cloze field number (several {{c1:...}})
 - Allow for mistakes => undo or else ?
+
+`cp "/mnt/c/Users/User/AppData/Roaming/Anki2/User 1/collection.anki2" ~/anki-editing/anki-collection-editing/data/collection.anki2`

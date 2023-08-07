@@ -43,13 +43,16 @@ def find_notes_to_change(col: Collection,
             
             if verbose:
                 cloze_text_index = note_details._fmap[cloze_text_field][1]["ord"]
-                logger.info(note_details.fields[cloze_text_index])
-                for k,field in enumerate(note_details.fields):
-                    if original_model["type"]!= CLOZE_TYPE and field !="" and k!=cloze_text_index:
-                        logger.warning(f'Field of the basic note is not empty and the text "{truncate_field(field)}" might be replaced')
+                if original_model["type"] == CLOZE_TYPE:
+                    logger.info(note_details.fields[cloze_text_index])
+                else:
+                    logger.warning(f"The fields of the note of Basic type are not emtpy and might be replaced")
+                    logger.info({field["name"]: truncate_field(note_details[field["name"]]) 
+                                    for field in original_model["flds"]
+                                    if note_details[field["name"]]!="" and field["name"]!=cloze_text_field})
+
         proceed()
     return list(notesID), original_model
-
 
 
 def create_note_type(col: Collection,

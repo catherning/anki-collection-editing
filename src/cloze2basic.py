@@ -1,10 +1,9 @@
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
 
-import re
 from loguru import logger
 from anki_utils import COL_PATH
-from utils import CLOZE_TYPE, proceed, truncate_field, add_field
+from utils import CLOZE_TYPE, proceed, truncate_field, add_field, get_field_index, extract_cloze_field, print_note_content
 
 if COL_PATH[-6:]!=".anki2":
     COL_PATH+="collection.anki2"
@@ -42,14 +41,9 @@ def find_notes_to_change(col: Collection,
             note_details = col.get_note(note)
             
             if verbose:
-                cloze_text_index = note_details._fmap[cloze_text_field][1]["ord"]
-                if original_model["type"] == CLOZE_TYPE:
-                    logger.info(note_details.fields[cloze_text_index])
-                else:
+                if original_model["type"] != CLOZE_TYPE:
                     logger.warning(f"The fields of the note of Basic type are not emtpy and might be replaced")
-                    logger.info({field["name"]: truncate_field(note_details[field["name"]]) 
-                                    for field in original_model["flds"]
-                                    if note_details[field["name"]]!="" and field["name"]!=cloze_text_field})
+                logger.info(print_note_content(cloze_text_field, original_model, note_details))
 
         proceed()
     return list(notesID), original_model
@@ -136,7 +130,7 @@ def extract_info_from_cloze(col,
     if "Original cloze text"==new_fields[-1][0]:
         field_to_extract_index = -1
     else:
-        field_to_extract_index = list(filter(lambda field: field["name"] == cloze_text_field, new_note_type["flds"]))[0]["ord"]
+        field_to_extract_index = get_field_index(new_note_type,cloze_text_field)
 
     
     
@@ -145,16 +139,10 @@ def extract_info_from_cloze(col,
         note = col.get_note(noteID)
         for i,(target_field,field_origin) in enumerate(new_fields): # Could use last value to see if it's a regex / cloze extraction
             if field_origin not in original_field_list:
-                regex = "\{\{%s::([^}:]*):?:?.*\}\}" % (field_origin)
-                # TODO: include case when there's several cloze for one card (ex: several {{c1::...}}) => to put in different fields
-                # https://regex101.com/r/usAlIw/1
-                p = re.compile(regex)
-                m = p.search(note.fields[field_to_extract_index])
-                if m:
-                    note.fields[i] =  m.group(1)
-                else:
-                    logger.error(f"Cloze text: '{note.fields[field_to_extract_index]}'")
-                    raise Exception(f"Regex {regex} incorrect. Information to put in {target_field=} not found. Maybe the original field name was wrong?")
+                try:
+                    note.fields[i] = extract_cloze_field(field_to_extract_index, note, field_origin)
+                except Exception:
+                    logger.info(f"Information to put in {target_field=} not found. Maybe the original field name was wrong?")
 
         logger.info(f"Final fields of the note: {[truncate_field(fld) for fld in note.fields]}")
         notes.append(note)
@@ -166,8 +154,7 @@ def extract_info_from_cloze(col,
     else:
         logger.warning("The note field extraction was not saved. But the notes were already converted.")
     col.close()
-        
-            
+
 
 def cloze2Basic(query: str,
                 new_type_name: str = None, 

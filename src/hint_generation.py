@@ -1,8 +1,8 @@
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
-
+from datetime import datetime
 from bs4 import BeautifulSoup, FeatureNotFound
-import re
+
 from loguru import logger
 from anki_utils import COL_PATH
 from cloze2basic import find_notes_to_change
@@ -90,14 +90,23 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
     note_hints = generate_global_hint(col, notesID, flds_in_hint, cloze_field_index, separator)
     
     # If the first hint info is numeric, then sort as int (not int as strings, otherwise "10"<"6")
+    get_first_el = lambda row: row.split(f" | ")[0]
+    
     try:
-        int_sorting_key = lambda row: int(row.split(f" | ")[0])
+        int_sorting_key = lambda row: int(get_first_el(row))
         [int_sorting_key(el) for el in note_hints]
         if sorting_key is None: sorting_key = int_sorting_key
     except ValueError:
         pass
     
-    note_hints_sorted = clean_hint(note_hints,break_lines, sorting_key=sorting_key)
+    try:
+        note_hints_sorted = clean_hint(note_hints,break_lines, sorting_key=sorting_key)
+    except Exception as e:
+        logger.error(e)
+        logger.error("There might have been an error with the sorting key. Trying to get the first element of the hint then the sorting key")
+        new_sorting_key = lambda row: sorting_key(get_first_el(row))
+        note_hints_sorted = clean_hint(note_hints,break_lines, sorting_key=new_sorting_key)
+        
     logger.info("The hint that will be repercuted to all notes is:")
     for hint in note_hints_sorted: logger.info(hint)
 
@@ -136,18 +145,19 @@ if __name__ == "__main__":
     
     note_type_name = "Cloze"
 
-    query = '"dynasty"'
+    query = '"birthstone"'
     break_lines = False
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter by using the query, just the note type, AND the field where we have the constant value (ex: Author) to generate the hints
     flds_in_hint = ["Year","Album"]
-    flds_in_hint = ["c2","c3","c1"]
+    flds_in_hint = ["c1","c2"]
     cloze_field = "Text"
-    hint_field = "Extra"
+    hint_field = "Hint"
+    sorting_key = lambda date: datetime.strptime(date, '%B')
 
     separator = "|"
     additional_hint = False
     additional_hint_field_char = "c2"
 
-    generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field)
+    generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field, sorting_key)
 

@@ -6,22 +6,38 @@ import re
 from loguru import logger
 from anki_utils import COL_PATH
 from cloze2basic import find_notes_to_change
+from utils import CLOZE_TYPE, get_field_index, extract_cloze_field, proceed, print_note_content
 
-def generate_global_hint(col, notesID, flds_in_hint, separator = ","):
+def generate_global_hint(col, notesID, flds_in_hint, cloze_field_index=None, separator = ","):
     note_hints = []
+    c_err = 0
     for nid in notesID:
         note = col.get_note(nid)
 
         #TODO: check if all notes have the same type? try if it's already checked. Otherwise, do I need to check note type each time, not above for loop?
         content=""
-        for field in flds_in_hint:
-            content += f"{note[field]} {separator} " 
+        if note._note_type["type"] == CLOZE_TYPE:
+            for cloze in flds_in_hint:
+                try:
+                    content += f"{extract_cloze_field(cloze_field_index, note, cloze)} {separator} "
+                except Exception:
+                    logger.error("Hint could not be extracted from cloze field. Is the note type Cloze or the given cloze number correct?")
+                    c_err +=1
+                # TODO: warnings / error if cloze type but fields given or the opposite
+        else:    
+            for field in flds_in_hint:
+                content += f"{note[field]} {separator} " 
         note_hints.append(content)
+    
+    if c_err > 0:
+        logger.warning("There were errors generating the hint from cloze fields.")
+        proceed()
+        
     return note_hints
 
-def clean_hint(note_hints,break_lines=False):
+def clean_hint(note_hints,break_lines=False,sorting_key = None):
     note_hints_sorted = note_hints[:]
-    note_hints_sorted.sort() # TODO: add sort field ? Now it's just the first field in flds_in_hint
+    note_hints_sorted.sort(key=sorting_key) # TODO: add sort field ? Now it's just the first field in flds_in_hint
 
     # Specifics to have lines breaks between decades when the sorting field is Year
     if break_lines:
@@ -36,7 +52,7 @@ def clean_hint(note_hints,break_lines=False):
     return note_hints_sorted
 
 
-def adapt_hint_to_note(col, note_hints_sorted, nid, cur_note_hint, hint_field,additional_hint=False,additional_hint_field_char=None):
+def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_text_field, additional_hint=False,additional_hint_field_char=None,func = None):
     note = col.get_note(nid)
     idx = note_hints_sorted.index(cur_note_hint)
     if additional_hint == False:
@@ -45,6 +61,7 @@ def adapt_hint_to_note(col, note_hints_sorted, nid, cur_note_hint, hint_field,ad
         try:
             hidding_char = BeautifulSoup(note[additional_hint_field_char], "lxml").text[0]
         except FeatureNotFound:
+            logger.warning("Using html.parser")
             hidding_char = BeautifulSoup(note[additional_hint_field_char], "html.parser").text[0]
         except KeyError:
             logger.error("The field from which you want a more precise hint is missing")
@@ -55,26 +72,38 @@ def adapt_hint_to_note(col, note_hints_sorted, nid, cur_note_hint, hint_field,ad
                 ("<br>" if idx!=len(note_hints_sorted)-1 else "") +
                 "<br>".join(note_hints_sorted[idx+1:])
                 )
-    logger.info("Hint adapted for the current note:")
+    
+    logger.info(f"Hint adapted for the current note {print_note_content(cloze_text_field, original_model, note)}:")
     for el in hint.split("<br>"):
         print(el)
     note[hint_field] = hint
     return note
 
 
-def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char):
+def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field=None, sorting_key = None):
     col = Collection(COL_PATH)
-    notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field="Original cloze text")
+    notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
+
+    cloze_field_index = get_field_index(original_model,cloze_field) if original_model["type"] == CLOZE_TYPE else None
     
-    note_hints = generate_global_hint(col, notesID,flds_in_hint, separator)
     
-    note_hints_sorted = clean_hint(note_hints,break_lines)
+    note_hints = generate_global_hint(col, notesID, flds_in_hint, cloze_field_index, separator)
+    
+    # If the first hint info is numeric, then sort as int (not int as strings, otherwise "10"<"6")
+    try:
+        int_sorting_key = lambda row: int(row.split(f" | ")[0])
+        [int_sorting_key(el) for el in note_hints]
+        if sorting_key is None: sorting_key = int_sorting_key
+    except ValueError:
+        pass
+    
+    note_hints_sorted = clean_hint(note_hints,break_lines, sorting_key=sorting_key)
     logger.info("The hint that will be repercuted to all notes is:")
     for hint in note_hints_sorted: logger.info(hint)
 
     notes = []
     for nid,cur_note_hint in zip(notesID,note_hints):
-        note = adapt_hint_to_note(col, note_hints_sorted, nid, cur_note_hint, hint_field, additional_hint, additional_hint_field_char)
+        note = adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_field, additional_hint, additional_hint_field_char)
         notes.append(note)
     
     logger.info("Confirm the hint generation and save notes ? (Y/n)")
@@ -105,22 +134,20 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
 
 if __name__ == "__main__":
     
-    note_type_name = "Music"
+    note_type_name = "Cloze"
 
-    query = '"Kanye"'
+    query = '"dynasty"'
     break_lines = False
-
-
-    # TODO: If cloze: then give the cloze that would be the sorting field and the hint one
-    # If basic: give the field
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter by using the query, just the note type, AND the field where we have the constant value (ex: Author) to generate the hints
     flds_in_hint = ["Year","Album"]
+    flds_in_hint = ["c2","c3","c1"]
+    cloze_field = "Text"
     hint_field = "Extra"
 
     separator = "|"
-    additional_hint = True
-    additional_hint_field_char = "Album"
+    additional_hint = False
+    additional_hint_field_char = "c2"
 
-    generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char)
+    generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field)
 

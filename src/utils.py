@@ -1,6 +1,7 @@
 
 import re
 from loguru import logger
+from bs4 import BeautifulSoup
 
 CLOZE_TYPE = 1
 
@@ -15,7 +16,7 @@ def proceed():
         exit() 
 
 def truncate_field(field,max_length=30):
-    return f'{field[:max_length]}...' if len(field)>max_length+3 else field
+    return f'{BeautifulSoup(field[:max_length], "html.parser").text}...' if len(BeautifulSoup(field, 'html.parser').text)>max_length+3 else BeautifulSoup(field, 'html.parser').text
 
 
 def add_field(col,new_note_type,field):

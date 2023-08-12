@@ -58,19 +58,21 @@ def clean_hint(note_hints,break_lines=False,sorting_key = None) -> list[str]:
     return note_hints_sorted
 
 
-def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_text_field, additional_hint=False,additional_hint_field_char=None,func = None):
+def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_text_field, additional_hint_field_char=None,func = None):
     note = col.get_note(nid)
     idx = note_hints_sorted.index(cur_note_hint[0])
-    if additional_hint == False:
+    if additional_hint_field_char is None:
         hidding_char = "?"
     else:
-        try:
-            hidding_char = BeautifulSoup(note[additional_hint_field_char], "lxml").text[0]
-        except FeatureNotFound:
-            logger.warning("Using html.parser")
-            hidding_char = BeautifulSoup(note[additional_hint_field_char], "html.parser").text[0]
-        except KeyError:
-            logger.error("The field from which you want a more precise hint is missing")
+        
+        if original_model["type"] == CLOZE_TYPE:
+            cloze_field_index = get_field_index(original_model,cloze_field) if original_model["type"] == CLOZE_TYPE else None
+            hidding_char = BeautifulSoup( extract_cloze_field(cloze_field_index, note, additional_hint_field_char), "html.parser").text[0]
+        else:
+            try:
+                hidding_char = BeautifulSoup(note[additional_hint_field_char], "html.parser").text[0]
+            except KeyError:
+                logger.error("The field from which you want a more precise hint is missing")
             
     hint = ( "<br>".join(note_hints_sorted[:idx]) + 
                 ("<br>" if idx!=0 else "") + 
@@ -86,7 +88,7 @@ def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hin
     return note
 
 
-def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field=None, sorting_key = None, sorting_field = None):
+def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field=None, sorting_key = None, sorting_field = None):
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
 
@@ -99,7 +101,7 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
     try:
         if sorting_key is None:
             [int(el[1]) for el in note_hints]
-            sorting_key = int
+            sorting_key = lambda row: int(row[1])
     except ValueError:
         pass
     
@@ -108,6 +110,7 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
     except Exception as e:
         logger.error(e)
         logger.error("There might have been an error with the sorting key.")
+        exit()
         # new_sorting_key = lambda row: sorting_key(get_first_el(row))
         # note_hints_sorted = clean_hint(note_hints,break_lines, sorting_key=new_sorting_key)
         
@@ -116,7 +119,7 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
 
     notes = []
     for nid,cur_note_hint in zip(notesID,note_hints):
-        note = adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_field, additional_hint, additional_hint_field_char)
+        note = adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_field, additional_hint_field_char)
         notes.append(note)
     
     logger.info("Confirm the hint generation and save notes ? (Y/n)")
@@ -147,23 +150,22 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
 
 if __name__ == "__main__":
     
-    note_type_name = "Chinois"
+    note_type_name = "Best Pictures"
 
-    query = '"flag:1"'
-    break_lines = False
+    query = "" #'"Academy Award for Best Picture"'
+    break_lines = True
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter by using the query, just the note type, AND the field where we have the constant value (ex: Author) to generate the hints
-    flds_in_hint = ["Simplified","Meaning"]
-    # flds_in_hint = ["c1","c2"]
-    cloze_field = None
-    hint_field = "Synonyms"
-    # sorting_key = lambda date: datetime.strptime(date, '%B')
-    sorting_field = "Pinyin.1"
-    sorting_key = lambda row: row[1]
+    flds_in_hint = ["Year","Movie winner"]
+    cloze_field = "" #"Text"
+    hint_field = "Extra"
+    sorting_field = "Year"
+    sorting_key = None #lambda row: row[1]
 
     separator = " | " # should add spaces
-    additional_hint = True
-    additional_hint_field_char = "Pinyin.1"
+    additional_hint_field_char = None # "Movie winner"
 
-    generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint, additional_hint_field_char, cloze_field, sorting_key, sorting_field = "Pinyin.1", )
+    for i in range(3,10):
+        query = f"Year:19{i}*"
+        generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field, sorting_key, sorting_field)
 

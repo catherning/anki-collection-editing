@@ -1,6 +1,7 @@
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
 
+import re
 from loguru import logger
 from anki_utils import COL_PATH
 from utils import CLOZE_TYPE, proceed, truncate_field, add_field, get_field_index, extract_cloze_field, print_note_content
@@ -9,7 +10,7 @@ if COL_PATH[-6:]!=".anki2":
     COL_PATH+="collection.anki2"
 
 def find_notes_to_change(col: Collection,
-                         query: str,
+                         query: str = "",
                          cloze_type_name: str = "Cloze",
                          verbose = True,
                          cloze_text_field="Text") -> tuple[list[int],int]: 
@@ -113,7 +114,7 @@ def change_note_type(col,
                 logger.info(f"For your information, the fields of the original note are: {[f_info['name'] for f_info in original_fields]}")
         except StopIteration:
             # Should not happen as we create the missing fields before
-            logger.errror(f"Field {target_field_info[0]} is not present in new note type. It will be created")
+            logger.error(f"Field {target_field_info[0]} is not present in new note type. It will be created")
 
             
     proceed()
@@ -212,16 +213,15 @@ if __name__ == "__main__":
     new_type_name = "Music"
     original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
     
-    # TODO: do the query, the person input the new fields mapping c1, c2 afterwards
-    # new_fields = [("Album" , "c2"),
-    #             ("Year"   , "c1"),
-    #             ("Group"   , "c3"),
-    #             ("Extra"  , "Extra")
-    #             ] 
-    query = '"album by" re:\{\{c3::Kanye re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
+    new_fields = [("Album" , "c3"),
+                ("Year"   , "c2"),
+                ("Group", "c1"),
+                ("Extra"  , "Extra")
+                ] 
+    query = 'album re:c3.*c\d.*c\d re:\{\{c2::\d' # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
     cloze_text_field= "Text" #"Original cloze text"
 
-    cloze2Basic(query = query, new_type_name = new_type_name , new_fields=None ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
+    cloze2Basic(query = query, new_type_name = new_type_name , new_fields=new_fields ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
 
 
 # FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?s

@@ -119,7 +119,9 @@ def change_note_type(col,
             
     proceed()
     col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
-    logger.warning("The notes were converted even if the extraction is not validated.")
+    logger.warning(("The notes were converted even if the extraction is not validated. "
+                   "If you don't confirm and save the notes, you can resume the conversion "
+                   "but you must change the origin note type to the name of the new note type"))
     
 def extract_info_from_cloze(col,
                             notesID,
@@ -211,17 +213,28 @@ def cloze2Basic(query: str,
 if __name__ == "__main__":
     # TODO: when code is correct, use args instead (don't need to debug) 
     new_type_name = "Music"
-    original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
+    original_type_name = "Cloze Music & Sport" #"Cloze Music & Sport" # "Olympic winners bis"
     
-    new_fields = [("Album" , "c3"),
-                ("Year"   , "c2"),
-                ("Group", "c1"),
-                ("Extra"  , "Extra")
-                ] 
-    query = 'album re:c3.*c\d.*c\d re:\{\{c2::\d' # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
-    cloze_text_field= "Text" #"Original cloze text"
+    clozes = ["c1","c2","c3"]
+    
+    for album_cloze in clozes:
+        for year_cloze in clozes:
+            for group_cloze in clozes:
+                if album_cloze == year_cloze or album_cloze == group_cloze or year_cloze == group_cloze:
+                    continue
+                
+                print(f"{album_cloze=} {year_cloze=} {group_cloze=}")
+                new_fields = [("Album" , album_cloze),
+                            ("Year"   , year_cloze),
+                            ("Group", group_cloze),
+                            ("Extra"  , "Back Extra")
+                            ] 
+                query = 'album re:' + album_cloze + '.*c\d.*c\d re:\{\{' + year_cloze + '::\d{4}' # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
+                cloze_text_field= "Text" #"Original cloze text"
 
-    cloze2Basic(query = query, new_type_name = new_type_name , new_fields=new_fields ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
-
+                try:
+                    cloze2Basic(query = query, new_type_name = new_type_name , new_fields=new_fields ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
+                except ValueError:
+                    continue
 
 # FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?s

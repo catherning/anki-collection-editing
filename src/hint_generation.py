@@ -91,6 +91,9 @@ def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hin
 def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field=None, sorting_key = None, sorting_field = None):
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
+    
+    if len(notesID)<2:
+        raise ValueError("There is only one note. You can't generate hints based on several notes.")
 
     cloze_field_index = get_field_index(original_model,cloze_field) if original_model["type"] == CLOZE_TYPE else None
     
@@ -150,13 +153,13 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
 
 if __name__ == "__main__":
     
-    note_type_name = "Best Pictures"
+    note_type_name = "Music"
 
     query = "" #'"Academy Award for Best Picture"'
-    break_lines = True
+    break_lines = False
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter by using the query, just the note type, AND the field where we have the constant value (ex: Author) to generate the hints
-    flds_in_hint = ["Year","Movie winner"]
+    flds_in_hint = ["Year","Album"]
     cloze_field = "" #"Text"
     hint_field = "Extra"
     sorting_field = "Year"
@@ -165,7 +168,23 @@ if __name__ == "__main__":
     separator = " | " # should add spaces
     additional_hint_field_char = None # "Movie winner"
 
-    for i in range(3,10):
-        query = f"Year:19{i}*"
-        generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field, sorting_key, sorting_field)
-
+    # for i in range(3,10):
+    #     query = f"Year:19{i}*"
+    
+    col = Collection(COL_PATH)
+    notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
+    
+    groups = []
+    for noteID in notesID:
+        note = col.get_note(noteID)
+        if note["Group"] not in groups:
+            groups.append(note["Group"])
+    col.close()
+    
+    for group in groups:
+        query = f'Group:"{group}"'
+        try:
+            generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field, sorting_key, sorting_field)
+        except ValueError as e:
+            print(group, e)
+            continue

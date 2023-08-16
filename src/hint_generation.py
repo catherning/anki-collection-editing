@@ -10,7 +10,12 @@ from anki_utils import COL_PATH
 from cloze2basic import find_notes_to_change
 from utils import CLOZE_TYPE, get_field_index, extract_cloze_field, proceed, print_note_content, truncate_field
 
-def generate_global_hint(col: Collection, notesID: list[str], flds_in_hint: list[str], cloze_field_index=None, separator = ", ", sorting_field = None) -> list[tuple[str,str]]:
+def generate_global_hint(col: Collection, 
+                         notesID: list[str], 
+                         flds_in_hint: list[str], 
+                         cloze_field_index : Optional[int], 
+                         separator: str = ", ", 
+                         sorting_field = None) -> list[tuple[str,str]]:
     note_hints = []
     c_err = 0
     for nid in notesID:

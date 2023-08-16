@@ -1,14 +1,16 @@
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
+from anki.notes import Note
 from datetime import datetime
 from bs4 import BeautifulSoup, FeatureNotFound
+from typing import Optional
 
 from loguru import logger
 from anki_utils import COL_PATH
 from cloze2basic import find_notes_to_change
 from utils import CLOZE_TYPE, get_field_index, extract_cloze_field, proceed, print_note_content, truncate_field
 
-def generate_global_hint(col, notesID, flds_in_hint, cloze_field_index=None, separator = ", ", sorting_field = None) -> list[tuple[str,str]]:
+def generate_global_hint(col: Collection, notesID: list[str], flds_in_hint: list[str], cloze_field_index=None, separator = ", ", sorting_field = None) -> list[tuple[str,str]]:
     note_hints = []
     c_err = 0
     for nid in notesID:
@@ -58,21 +60,22 @@ def clean_hint(note_hints,break_lines=False,sorting_key = None) -> list[str]:
     return note_hints_sorted
 
 
-def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_text_field, additional_hint_field_char=None,func = None):
+def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_text_field, additional_hint_field=None,func = None):
     note = col.get_note(nid)
     idx = note_hints_sorted.index(cur_note_hint[0])
-    if additional_hint_field_char is None:
+    if additional_hint_field is None:
         hidding_char = "?"
     else:
         
         if original_model["type"] == CLOZE_TYPE:
             cloze_field_index = get_field_index(original_model,cloze_field) if original_model["type"] == CLOZE_TYPE else None
-            hidding_char = BeautifulSoup( extract_cloze_field(cloze_field_index, note, additional_hint_field_char), "html.parser").text[0]
+            hidding_char = BeautifulSoup( extract_cloze_field(cloze_field_index, note, additional_hint_field), "html.parser").text[0]
         else:
             try:
-                hidding_char = BeautifulSoup(note[additional_hint_field_char], "html.parser").text[0]
-            except KeyError:
+                hidding_char = BeautifulSoup(note[additional_hint_field], "html.parser").text[0]
+            except KeyError as e:
                 logger.error("The field from which you want a more precise hint is missing")
+                raise e
             
     hint = ( "<br>".join(note_hints_sorted[:idx]) + 
                 ("<br>" if idx!=0 else "") + 
@@ -88,7 +91,15 @@ def adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hin
     return note
 
 
-def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field=None, sorting_key = None, sorting_field = None):
+def generate_hint(note_type_name : str, query : str, 
+                  flds_in_hint: list[str], 
+                  hint_field: str, 
+                  additional_hint_field: Optional[str], 
+                  break_lines: bool = False, 
+                  separator : str = ", ", 
+                  cloze_field: Optional[str], 
+                  sorting_key = None, 
+                  sorting_field: Optional[str]):
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
     
@@ -122,7 +133,7 @@ def generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, br
 
     notes = []
     for nid,cur_note_hint in zip(notesID,note_hints):
-        note = adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_field, additional_hint_field_char)
+        note = adapt_hint_to_note(col, note_hints_sorted, original_model, nid, cur_note_hint, hint_field, cloze_field, additional_hint_field)
         notes.append(note)
     
     logger.info("Confirm the hint generation and save notes ? (Y/n)")
@@ -165,8 +176,8 @@ if __name__ == "__main__":
     sorting_field = "Year"
     sorting_key = None #lambda row: row[1]
 
-    separator = " | " # should add spaces
-    additional_hint_field_char = None # "Movie winner"
+    separator = " " # should add spaces
+    additional_hint_field = None # "Movie winner"
 
     # for i in range(3,10):
     #     query = f"Year:19{i}*"
@@ -184,7 +195,7 @@ if __name__ == "__main__":
     for group in groups:
         query = f'Group:"{group}"'
         try:
-            generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field_char, cloze_field, sorting_key, sorting_field)
+            generate_hint(note_type_name, query, flds_in_hint, separator, hint_field, break_lines, additional_hint_field, cloze_field, sorting_key, sorting_field)
         except ValueError as e:
             print(group, e)
             continue

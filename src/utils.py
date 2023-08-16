@@ -19,12 +19,24 @@ def truncate_field(field,max_length=30):
     return f'{BeautifulSoup(field[:max_length], "html.parser").text}...' if len(BeautifulSoup(field, 'html.parser').text)>max_length+3 else BeautifulSoup(field, 'html.parser').text
 
 
-def add_field(col,new_note_type,field):
+def add_field(col, new_note_type, field):
+    """
+    Adds a new field to a note type.
+
+    Parameters:
+    col (object): The collection object.
+    new_note_type (str): The name of the note type to which the field should be added.
+    field (str): The name of the new field.
+
+    Returns:
+    None
+    """
     fieldDict = col.models.new_field(field)
     col.models.add_field(new_note_type, fieldDict)
     
 def get_field_index(note_type,field_name):
     return list(filter(lambda field: field["name"] == field_name, note_type["flds"]))[0]["ord"]
+
 
 def extract_cloze_field(field_to_extract_index, note, cloze_origin):
     regex = "\{\{%s::([^}:]*):?:?.*\}\}" % cloze_origin

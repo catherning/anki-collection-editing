@@ -1,6 +1,6 @@
 from anki.collection import Collection
 from anki.models import NotetypeDict, ModelManager
-
+from typing import Optional
 import re
 from loguru import logger
 from anki_utils import COL_PATH
@@ -11,9 +11,9 @@ if COL_PATH[-6:]!=".anki2":
 
 def find_notes_to_change(col: Collection,
                          query: str = "",
-                         cloze_type_name: str = "Cloze",
+                         note_type_name: str = "Cloze",
                          verbose = True,
-                         cloze_text_field="Text") -> tuple[list[int],int]: 
+                         cloze_text_field="Text") -> tuple[list[int],NotetypeDict]: 
     """Retrieves the notes to change according to a query.
 
     Args:
@@ -29,7 +29,7 @@ def find_notes_to_change(col: Collection,
     """
     
     # Get the notes to edit
-    new_query  = query + f' note:"{cloze_type_name}"'
+    new_query  = query + f' note:"{note_type_name}"'
     notesID = col.find_notes(new_query)
 
     if len(notesID)==0:
@@ -86,12 +86,27 @@ def create_note_type(col: Collection,
     return new_note_type
     
 
-def change_note_type(col, 
+def change_note_type(col: Collection, 
                      old_note_type: dict,
                      new_note_type: dict,
                      notesID: list[int],
                      new_fields: list[tuple] ):
-    # Change the note type
+    """
+    Change the note type of Anki flashcards and map fields from the old note type to the new note type.
+
+    Parameters:
+    col (Collection): The Anki collection object.
+    old_note_type (dict): A dictionary representing the old note type.
+    new_note_type (dict): A dictionary representing the new note type.
+    notesID (list[int]): A list of integers representing the IDs of the notes to be changed.
+    new_fields (list[tuple]): A list of tuples representing the new fields to be added to the new note type.
+
+    Raises:
+    ValueError: If the number of new fields is less than 2.
+
+    Returns:
+    None
+    """
 
     if len(new_fields)<2:
         raise ValueError("You must map at least two fields")
@@ -160,15 +175,15 @@ def extract_info_from_cloze(col,
 
 
 def cloze2Basic(query: str,
-                new_type_name: str = None, 
-                new_fields: list[tuple] = None,
+                new_type_name: str, 
+                new_fields: Optional[list[tuple]],
                 original_type_name = "Cloze",
                 cloze_text_field = "Text"
-                ):
+                ) :
 
     col = Collection(COL_PATH)
 
-    notesID, original_model = find_notes_to_change(col,query, original_type_name,cloze_text_field)
+    notesID, original_model = find_notes_to_change(col,query = query, note_type_name = original_type_name,cloze_text_field = cloze_text_field)
     
     original_field_list = [fld["name"] for fld in original_model["flds"]]
     
@@ -182,7 +197,7 @@ def cloze2Basic(query: str,
             field_info = [el.strip() for el in field.split(",")]
             if field == "stop" or len(field_info)!=2:
                 break
-            new_fields.append(field_info)
+            new_fields.append(tuple(field_info))
             logger.info(f"New field information {field_info} added")
 
     # If model is of type Cloze, we do the conversion, otherwise we just do the regex extraction
@@ -213,28 +228,28 @@ def cloze2Basic(query: str,
 if __name__ == "__main__":
     # TODO: when code is correct, use args instead (don't need to debug) 
     new_type_name = "Music"
-    original_type_name = "Cloze Music & Sport" #"Cloze Music & Sport" # "Olympic winners bis"
+    original_type_name = "Cloze" #"Cloze Music & Sport" # "Olympic winners bis"
     
     clozes = ["c1","c2","c3"]
-    
-    for album_cloze in clozes:
-        for year_cloze in clozes:
-            for group_cloze in clozes:
-                if album_cloze == year_cloze or album_cloze == group_cloze or year_cloze == group_cloze:
-                    continue
-                
-                print(f"{album_cloze=} {year_cloze=} {group_cloze=}")
-                new_fields = [("Album" , album_cloze),
-                            ("Year"   , year_cloze),
-                            ("Group", group_cloze),
-                            ("Extra"  , "Back Extra")
-                            ] 
-                query = 'album re:' + album_cloze + '.*c\d.*c\d re:\{\{' + year_cloze + '::\d{4}' # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
-                cloze_text_field= "Text" #"Original cloze text"
+    for original_type_name, extra_field in zip(["Cloze","Cloze Music & Sport"],["Extra","Back Extra"]):
+        for album_cloze in clozes:
+            for year_cloze in clozes:
+                for group_cloze in clozes:
+                    if album_cloze == year_cloze or album_cloze == group_cloze or year_cloze == group_cloze:
+                        continue
+                    
+                    print(f"{album_cloze=} {year_cloze=} {group_cloze=}")
+                    new_fields = [("Album" , album_cloze),
+                                ("Year"   , year_cloze),
+                                ("Group", group_cloze),
+                                ("Extra"  , extra_field)
+                                ] 
+                    query = 'album re:' + album_cloze + '.*c\d.*c\d re:\{\{' + year_cloze + '::\d{4}' # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' # 
+                    cloze_text_field= "Text" #"Original cloze text"
 
-                try:
-                    cloze2Basic(query = query, new_type_name = new_type_name , new_fields=new_fields ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
-                except ValueError:
-                    continue
+                    try:
+                        cloze2Basic(query = query, new_type_name = new_type_name , new_fields=new_fields ,original_type_name=original_type_name,cloze_text_field=cloze_text_field)
+                    except ValueError:
+                        continue
 
 # FIXME: needs to have the latest (?) version of Anki GUI. Or min the same version as the Anki module used here => Either try with older version of Anki library, or issues is fixed when having the script as an addon ?s

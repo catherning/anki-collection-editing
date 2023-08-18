@@ -115,23 +115,24 @@ def change_note_type(
     new_note_type: dict,
     notesID: list[int],
     new_fields: list[tuple],
-):
+) -> None:
     """
     Convert the note type of Anki flashcards.
 
-    Parameters:
-    col (Collection): The Anki collection object.
-    old_note_type (dict): A dictionary representing the old note type.
-    new_note_type (dict): A dictionary representing the new note type.
-    notesID (list[int]): A list of the IDs of the notes to be changed.
-    new_fields (list[tuple]): A list of the new fields to be added to the new note type.
-    It is in the form (<new_field>,<old_field>). Ex: ("Album","c1") or ("Album","Albums")
+    Args:
+        col (Collection): The Anki collection object.
+        old_note_type (dict): A dictionary representing the old note type.
+        new_note_type (dict): A dictionary representing the new note type.
+        notesID (list[int]): A list of the IDs of the notes to be changed.
+        new_fields (list[tuple]): The new fields to be added to the new note type.
+        It is in the form (<new_field>,<old_field>).
+        Ex: ("Album","c1") or ("Album","Albums")
 
     Raises:
     ValueError: If the number of new fields is less than 2.
 
     Returns:
-    None
+        None
     """
 
     if len(new_fields) < 2:
@@ -200,6 +201,16 @@ def extract_info_from_cloze(
     original_field_list,
     cloze_text_field="Text",
 ):
+    """Extract the information from a cloze field
+
+    Args:
+        col (_type_): _description_
+        notesID (_type_): _description_
+        new_note_type (_type_): _description_
+        new_fields (_type_): _description_
+        original_field_list (_type_): _description_
+        cloze_text_field (str, optional): _description_. Defaults to "Text".
+    """
     if "Original cloze text" == new_fields[-1][0]:
         field_to_extract_index = -1
     else:

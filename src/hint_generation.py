@@ -202,10 +202,32 @@ def generate_hint(
     additional_hint_field: Optional[str],
     sorting_key: Optional[Callable],
     sorting_field: Optional[str],
+    cloze_field: Optional[str],
     separator: str = ", ",
     break_lines: bool = False,
-    cloze_field: str = "",
 ) -> None:
+    """Main method to generate hints for several notes using their information.
+
+    Args:
+        note_type_name (str): The name of the common note type
+        query (str): The query to find the notes to update
+        flds_in_hint (list[str]): The fields from where to extract the hint info.
+        Ex: ["c2","c1"] if the notes are Cloze notes
+        hint_field (str): The field where the hint will be stored in
+        additional_hint_field (Optional[str]): The field from where to extract
+        the eventual additional hint in the form of the first character of the field
+        sorting_key (Optional[Callable]): The key to sort the hints
+        sorting_field (Optional[str]): The field used for sorting
+        cloze_field (Optional[str]): The name of the cloze field if notes are Cloze.
+        separator (str, optional): The string to separate the info from flds_in_hint.
+        Defaults to ", ".
+        break_lines (bool, optional): If you want breaklines. For now it only works
+        if the sorting field is numerical (years) and it add breaklines between decades.
+        Defaults to False.
+
+    Raises:
+        ValueError: If there are only 2 notes found with the query
+    """
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(
         col, query, note_type_name, verbose=True, cloze_text_field=cloze_field

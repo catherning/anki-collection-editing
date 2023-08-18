@@ -21,8 +21,8 @@ def find_notes_to_change(
     col: Collection,
     query: str = "",
     note_type_name: str = "Cloze",
-    verbose=True,
-    cloze_text_field="Text",
+    verbose: bool = True,
+    cloze_text_field: str = "Text",
 ) -> tuple[list[int], NotetypeDict]:
     """Retrieves the notes to change according to a query.
 
@@ -60,6 +60,7 @@ def find_notes_to_change(
                         "The fields of the note of Basic type are not emtpy"
                         "and might be replaced"
                     )
+                # TODO: find cloze_text_field by getting the field with c1 ?
                 logger.info(
                     print_note_content(cloze_text_field, original_model, note_details)
                 )

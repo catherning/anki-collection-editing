@@ -26,19 +26,19 @@ def find_notes_to_change(
 ) -> tuple[list[int], NotetypeDict]:
     """Retrieves the notes to change according to a query.
 
-        Args:
-            col (Collection): The full Anki collection with all models and notes
-            query (str): Query to use to find the notes to change
-            note_type_name (str, optional): Name of the note type. Defaults to "Cloze".
-            verbose: To show more information on the notes found. Defaults to True
-            cloze_text_field: Field name containing the cloze note. Defaults to "Text"
-    0
-        Raises:
-            ValueError: If no note was found (because the query or note type name
-            is wrong)
+    Args:
+        col (Collection): The full Anki collection with all models and notes
+        query (str): Query to use to find the notes to change
+        note_type_name (str, optional): Name of the note type. Defaults to "Cloze".
+        verbose: To show more information on the notes found. Defaults to True
+        cloze_text_field: Field name containing the cloze note. Defaults to "Text"
 
-        Returns:
-            list[int]: The list of the IDs of the notes to convert
+    Raises:
+        ValueError: If no note was found (because the query or note type name
+        is wrong)
+
+    Returns:
+        list[int]: The list of the IDs of the notes to convert
     """
 
     # Get the notes to edit
@@ -244,7 +244,24 @@ def cloze2Basic(
     new_fields: Optional[list[tuple]],
     original_type_name="Cloze",
     cloze_text_field="Text",
-):
+) -> None:
+    """Main method to convert Anki notes from Cloze type to a Basic type
+
+    Args:
+        query (str): The query to search for the notes to convert.
+            It follows the search convention from Anki.
+            Ex, if you want to add regex search, use: 're:<pattern>'
+        new_type_name (str): The name of the new Basic note type
+        new_fields (Optional[list[tuple]]): A list of the new fields to be added
+        to the new note type.
+        It is in the form (<new_field>,<old_field>).
+        Ex: ("Album","c1") or ("Album","Albums") to mean that the new field Album
+        will extract the c1 cloze field or the old "Albums" field
+        original_type_name (str, optional): The name of the previous note type.
+        Could be new_type_name if you are resuming a conversion. Defaults to "Cloze".
+        cloze_text_field (str, optional): The name of the field holding the cloze text
+        when the original type is a Cloze. Defaults to "Text".
+    """
     col = Collection(COL_PATH)
 
     notesID, original_model = find_notes_to_change(

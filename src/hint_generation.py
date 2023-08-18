@@ -3,6 +3,8 @@ from typing import Callable
 from typing import Optional
 
 from anki.collection import Collection
+from anki.models import ModelManager
+from anki.models import NotetypeDict
 from anki_utils import COL_PATH
 from bs4 import BeautifulSoup
 from cloze2basic import find_notes_to_change
@@ -14,8 +16,6 @@ from utils import print_note_content
 from utils import proceed
 from utils import truncate_field
 
-# from anki.models import ModelManager
-# from anki.models import NotetypeDict
 # from anki.notes import Note
 
 
@@ -27,6 +27,22 @@ def generate_global_hint(
     separator: str = ", ",
     sorting_field=None,
 ) -> list[tuple[str, str]]:
+    """Generate the global hint that uses information from several notes.
+
+    Args:
+        col (Collection): The Anki Collection
+        notesID (list[int]): The IDs of the notes for which to add the generated hint
+        flds_in_hint (list[str]): The fields of the notes to use to generate the hint
+        cloze_field_index (Optional[int]): The index of the cloze field if the notes
+        are Cloze
+        separator (str, optional): The string to add between each info from the fields in
+            flds_in_hint. Defaults to ", ".
+        sorting_field (_type_, optional): The field to use to sort the hint.
+        Defaults to None.
+
+    Returns:
+        list[tuple[str, str]]: The list of global hint and the field info used for sorting
+    """
     note_hints = []
     c_err = 0
     for nid in notesID:
@@ -69,6 +85,19 @@ def clean_hint(
     sorting_key: Optional[Callable],
     break_lines: bool = False,
 ) -> list[str]:
+    """Clean the global hint by sorting and eventually adding break lines.
+
+    Args:
+        note_hints (list[tuple[str, str]]): The generated global hint to clean
+        sorting_key (Optional[Callable]): The method to use to sort the hint
+        (alphabetically, numerically). Ex: lambda row: int(row[1])
+        break_lines (bool, optional): If you want breaklines. For now it only works
+        if the sorting field is numerical (years) and it add breaklines between decades.
+        Defaults to False.
+
+    Returns:
+        list[str]: The cleaned hints
+    """
     note_hints_sorted = note_hints[:]
     note_hints_sorted.sort(key=sorting_key)  # TODO: add sort field. Ex: pinyin
     # Issue with sorting pinyin for now:
@@ -89,18 +118,40 @@ def clean_hint(
 
 
 def adapt_hint_to_note(
-    col,
-    note_hints_sorted,
-    original_model,
-    nid,
-    cur_note_hint,
-    hint_field,
-    cloze_text_field,
-    additional_hint_field=None,
+    col: Collection,
+    note_hints_sorted: list[str],
+    original_model: ModelManager,
+    nid: int,
+    cur_note_hint: str,
+    hint_field: str,
+    cloze_text_field: str,
+    additional_hint_field: Optional[str],
     # func=None,
-):
+) -> NotetypeDict:
+    """Adapt the hint to a note by hiding the hint info of that note and update the note.
+
+    Args:
+        col (Collection): The Anki collection
+        note_hints_sorted (list[str]): The cleaned global hint
+        original_model (ModelManager): The type of the note
+        nid (int): The ID of the note
+        cur_note_hint (str): The hint corresponding to the current note
+        hint_field (str): The field that will be populated with the hint
+        cloze_text_field (str): The field with the cloze text (only for
+        logging purposes)
+        additional_hint_field (Optional[str]): The field with the eventual
+        additional hint.
+        If not given, then we hide the hint info with '?'. Otherwise, for now,
+        we show the first character of the info in the additional_hint_field
+
+    Raises:
+        KeyError: Additional_hint_field is wrong
+
+    Returns:
+        NotetypeDict: The updated note
+    """
     note = col.get_note(nid)
-    idx = note_hints_sorted.index(cur_note_hint[0])
+    idx = note_hints_sorted.index(cur_note_hint)
     if additional_hint_field is None:
         hidding_char = "?"
     else:
@@ -211,7 +262,7 @@ def generate_hint(
             note_hints_sorted,
             original_model,
             nid,
-            cur_note_hint,
+            cur_note_hint[0],
             hint_field,
             cloze_field,
             additional_hint_field,

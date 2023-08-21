@@ -7,10 +7,10 @@ from anki.models import ModelManager
 from anki.models import NotetypeDict
 from anki_utils import COL_PATH
 from bs4 import BeautifulSoup
-from cloze2basic import find_notes_to_change
 from loguru import logger
 from utils import CLOZE_TYPE
-from utils import extract_cloze_field
+from utils import extract_cloze_deletion
+from utils import find_notes_to_change
 from utils import get_field_index
 from utils import print_note_content
 from utils import proceed
@@ -55,7 +55,8 @@ def generate_global_hint(
             for cloze in flds_in_hint:
                 try:
                     content += (
-                        extract_cloze_field(cloze_field_index, note, cloze) + separator
+                        extract_cloze_deletion(cloze_field_index, note, cloze)
+                        + separator
                     )
                 except Exception:
                     logger.error(
@@ -64,7 +65,9 @@ def generate_global_hint(
                     )
                     c_err += 1
                 # TODO: warnings / error if cloze type but fields given or the opposite
-            sorting_info = extract_cloze_field(cloze_field_index, note, sorting_field)
+            sorting_info = extract_cloze_deletion(
+                cloze_field_index, note, sorting_field
+            )
         else:
             for field in flds_in_hint:
                 text = BeautifulSoup(note[field], "html.parser").text
@@ -124,7 +127,7 @@ def adapt_hint_to_note(
     nid: int,
     cur_note_hint: str,
     hint_field: str,
-    cloze_text_field: str,
+    cloze_field: str,
     additional_hint_field: Optional[str],
     # func=None,
 ) -> NotetypeDict:
@@ -137,7 +140,7 @@ def adapt_hint_to_note(
         nid (int): The ID of the note
         cur_note_hint (str): The hint corresponding to the current note
         hint_field (str): The field that will be populated with the hint
-        cloze_text_field (str): The field with the cloze text (only for
+        cloze_field (str): The field with the cloze text (only for
         logging purposes)
         additional_hint_field (Optional[str]): The field with the eventual
         additional hint.
@@ -162,7 +165,7 @@ def adapt_hint_to_note(
                 else None
             )
             hidding_char = BeautifulSoup(
-                extract_cloze_field(cloze_field_index, note, additional_hint_field),
+                extract_cloze_deletion(cloze_field_index, note, additional_hint_field),
                 "html.parser",
             ).text[0]
         else:
@@ -186,7 +189,7 @@ def adapt_hint_to_note(
 
     logger.info(
         "Hint adapted for the current note"
-        f" {print_note_content(cloze_text_field, original_model, note)}:"
+        f" {print_note_content(cloze_field, original_model, note)}:"
     )
     for el in hint.split("<br>"):
         print(el)

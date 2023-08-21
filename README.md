@@ -186,10 +186,11 @@ for group in groups:
 ```
 
 ## Roadmap
-- Make it a CLI
+- Make it a CLI, then Anki Addon / python library ?
 - Handle the repetition of cloze field number (several {{c1:...}} in a Cloze)
 - Make the generation of hints as tables possible
 - Improve the search for the synonyms. For now, you need to manually group together (with a tag, flag or a specific enough query to filter only the wanted notes) the notes that are synonyms
+- Clean code by using constants, and following OOP principles?
 
 ## Contributing
 

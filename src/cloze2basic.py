@@ -7,9 +7,9 @@ from anki_utils import COL_PATH
 from loguru import logger
 from utils import add_field
 from utils import CLOZE_TYPE
-from utils import extract_cloze_field
+from utils import extract_cloze_deletion
+from utils import find_notes_to_change
 from utils import get_field_index
-from utils import print_note_content
 from utils import proceed
 from utils import truncate_field
 
@@ -17,62 +17,10 @@ if COL_PATH[-6:] != ".anki2":
     COL_PATH += "collection.anki2"
 
 
-def find_notes_to_change(
-    col: Collection,
-    query: str = "",
-    note_type_name: str = "Cloze",
-    verbose: bool = True,
-    cloze_text_field: str = "Text",
-) -> tuple[list[int], NotetypeDict]:
-    """Retrieves the notes to change according to a query.
-
-    Args:
-        col (Collection): The full Anki collection with all models and notes
-        query (str): Query to use to find the notes to change
-        note_type_name (str, optional): Name of the note type. Defaults to "Cloze".
-        verbose: To show more information on the notes found. Defaults to True
-        cloze_text_field: Field name containing the cloze note. Defaults to "Text"
-
-    Raises:
-        ValueError: If no note was found (because the query or note type name
-        is wrong)
-
-    Returns:
-        list[int]: The list of the IDs of the notes to convert
-    """
-
-    # Get the notes to edit
-    new_query = query + f' note:"{note_type_name}"'
-    notesID = col.find_notes(new_query)
-
-    if len(notesID) == 0:
-        raise ValueError("No notes found. Please review your query and cloze note type")
-    else:
-        logger.info(f"Number of notes found: {len(notesID)}")
-        original_modelID = col.models.get_single_notetype_of_notes(notesID)
-        original_model = col.models.get(original_modelID)
-        for note in notesID:
-            note_details = col.get_note(note)
-
-            if verbose:
-                if original_model["type"] != CLOZE_TYPE:
-                    logger.warning(
-                        "The fields of the note of Basic type are not emtpy"
-                        "and might be replaced"
-                    )
-                # TODO: find cloze_text_field by getting the field with c1 ?
-                logger.info(
-                    print_note_content(cloze_text_field, original_model, note_details)
-                )
-
-        proceed()
-    return list(notesID), original_model
-
-
 def create_note_type(
     col: Collection,
     note_name: str,
-    new_fields: list[tuple],
+    new_fields: list[tuple[str, str]],
     original_field_list: list[str],
 ) -> NotetypeDict:
     """Creates the new note type and the card templates.
@@ -80,7 +28,7 @@ def create_note_type(
     Args:
         col (Collection): The full Anki collection with all models and notes
         note_name (str): The name of the new note
-        new_fields (list[tuple]): The list of new field names and how to fill it
+        new_fields (list[tuple[str,str]]): The list of new field names and how to fill it
         original_field_list (list[str]): The list of
 
     Returns:
@@ -114,7 +62,7 @@ def change_note_type(
     old_note_type: dict,
     new_note_type: dict,
     notesID: list[int],
-    new_fields: list[tuple],
+    new_fields: list[tuple[str, str]],
 ) -> None:
     """
     Convert the note type of Anki flashcards.
@@ -124,8 +72,8 @@ def change_note_type(
         old_note_type (dict): A dictionary representing the old note type.
         new_note_type (dict): A dictionary representing the new note type.
         notesID (list[int]): A list of the IDs of the notes to be changed.
-        new_fields (list[tuple]): The new fields to be added to the new note type.
-        It is in the form (<new_field>,<old_field>).
+        new_fields (list[tuple[str,str]]): The new fields to be added to
+        the new note type. It is in the form (<new_field>,<old_field>).
         Ex: ("Album","c1") or ("Album","Albums")
 
     Raises:
@@ -193,24 +141,27 @@ def change_note_type(
     )
 
 
-def extract_info_from_cloze(
-    col,
-    notesID,
-    new_note_type,
-    new_fields,
-    original_field_list,
-    cloze_text_field="Text",
+def extract_info_from_cloze_deletion(
+    col: Collection,
+    notesID: list[int],
+    new_note_type: NotetypeDict,
+    new_fields: list[tuple[str, str]],
+    original_field_list: list[str],
+    cloze_text_field: str = "Text",
 ):
-    """Extract the information from a cloze field
+    """Copy the information from the cloze deletion to a new field.
 
     Args:
-        col (_type_): _description_
-        notesID (_type_): _description_
-        new_note_type (_type_): _description_
-        new_fields (_type_): _description_
-        original_field_list (_type_): _description_
-        cloze_text_field (str, optional): _description_. Defaults to "Text".
+        col (Collection): The Anki Collection
+        notesID (list[int]): The IDs of the notes to edit
+        new_note_type (NotetypeDict): The new type of all the notes to edit
+        new_fields (list[tuple[str,str]]): The mapping of the new fields from
+        the cloze deletions/fields
+        original_field_list (list[str]): The fields of the previous note type
+        cloze_text_field (str, optional): The name of the field with cloze text.
+        Defaults to "Text".
     """
+
     if "Original cloze text" == new_fields[-1][0]:
         field_to_extract_index = -1
     else:
@@ -224,7 +175,7 @@ def extract_info_from_cloze(
         ):  # Could use last value to see if it's a regex / cloze extraction
             if field_origin not in original_field_list:
                 try:
-                    note.fields[i] = extract_cloze_field(
+                    note.fields[i] = extract_cloze_deletion(
                         field_to_extract_index, note, field_origin
                     )
                 except Exception:
@@ -253,7 +204,7 @@ def extract_info_from_cloze(
 def cloze2Basic(
     query: str,
     new_type_name: str,
-    new_fields: Optional[list[tuple]],
+    new_fields: Optional[list[tuple[str, str]]],
     original_type_name="Cloze",
     cloze_text_field="Text",
 ) -> None:
@@ -331,7 +282,7 @@ def cloze2Basic(
     else:
         new_note_type = original_model
 
-    extract_info_from_cloze(
+    extract_info_from_cloze_deletion(
         col, notesID, new_note_type, new_fields, original_field_list, cloze_text_field
     )
 

@@ -1,8 +1,7 @@
 import re
 
 from anki.collection import Collection
-from anki.models import ModelsDictProxy
-from anki.models import NotetypeDict
+from anki.models import ModelsDictProxy, NotetypeDict
 from anki.notes import Note
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -61,7 +60,7 @@ def find_notes_to_change(
             if verbose:
                 if original_model["type"] != CLOZE_TYPE:
                     logger.warning(
-                        "The fields of the note of Basic type are not emtpy"
+                        "The fields of the note of Basic type are not emtpy "
                         "and might be replaced"
                     )
                 # TODO: find cloze_text_field by getting the field with c1 ?

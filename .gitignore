@@ -2,3 +2,4 @@ data/
 __pycache__/
 anki_utils.py
 .vscode
+collection.anki2

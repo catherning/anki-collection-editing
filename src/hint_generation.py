@@ -129,6 +129,7 @@ def adapt_hint_to_note(
     hint_field: str,
     cloze_field: str,
     additional_hint_field: Optional[str],
+    replace: bool = False,
     # func=None,
 ) -> NotetypeDict:
     """Adapt the hint to a note by hiding the hint info of that note and update the note.
@@ -193,7 +194,11 @@ def adapt_hint_to_note(
     )
     for el in hint.split("<br>"):
         print(el)
-    note[hint_field] = hint
+
+    if replace:
+        note[hint_field] = hint
+    else:
+        note[hint_field] += hint
     return note
 
 
@@ -208,6 +213,7 @@ def generate_hint(
     cloze_field: Optional[str],
     separator: str = ", ",
     break_lines: bool = False,
+    replace: bool = False,
 ) -> None:
     """Main method to generate hints for several notes using their information.
 
@@ -227,9 +233,11 @@ def generate_hint(
         break_lines (bool, optional): If you want breaklines. For now it only works
         if the sorting field is numerical (years) and it add breaklines between decades.
         Defaults to False.
+        replace (bool, optional): If you want to replace, not append the hing field.
+        Defaults to False.
 
     Raises:
-        ValueError: If there are only 2 notes found with the query
+        ValueError: If there is only 0 or 1 note found with the query
     """
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(
@@ -291,6 +299,7 @@ def generate_hint(
             hint_field,
             cloze_field,
             additional_hint_field,
+            replace
         )
         notes.append(note)
 
@@ -325,53 +334,51 @@ def generate_hint(
 
 
 if __name__ == "__main__":
-    note_type_name = "Music"
+    note_type_name = "Chinois"
 
-    query = ""  # '"Academy Award for Best Picture"'
+    # query = ""  # '"Academy Award for Best Picture"'
     break_lines = False
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter
     # by using the query, just the note type, AND the field where we have
     # the constant value (ex: Author) to generate the hints
-    flds_in_hint = ["Year", "Album"]
+    flds_in_hint = ["Simplified", "Meaning"]
     cloze_field = ""  # "Text"
-    hint_field = "Extra"
-    sorting_field = "Year"
+    hint_field = "Synonyms"
+    sorting_field = "Pinyin.1"
     sorting_key = None  # lambda row: row[1]
 
-    separator = " "  # should add spaces
-    additional_hint_field = None  # "Movie winner"
+    separator = " | "  # should add spaces
+    additional_hint_field = "Pinyin.1"  # "Movie winner"
 
-    # for i in range(3,10):
-    #     query = f"Year:19{i}*"
-
+    # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+    i=0
     col = Collection(COL_PATH)
-    notesID, original_model = find_notes_to_change(
-        col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
-    )
-
-    groups = []
-    for noteID in notesID:
-        note = col.get_note(noteID)
-        if note["Group"] not in groups:
-            groups.append(note["Group"])
-    col.close()
-
-    for group in groups:
-        query = f'Group:"{group}"'
+    while True:
+        i+=1
+        query = f'"Synonyms group:re:(^|, ){i}(,\W|$)"'
+    
         try:
-            generate_hint(
-                note_type_name,
-                query,
-                flds_in_hint,
-                hint_field,
-                additional_hint_field,
-                sorting_key,
-                sorting_field,
-                separator=separator,
-                break_lines=break_lines,
-                cloze_field=cloze_field,
+            notesID, original_model = find_notes_to_change(
+                col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
             )
-        except ValueError as e:
-            print(group, e)
-            continue
+        except ValueError:
+            print(f"No more synonym groups. Last group ID is {i-1}")
+            break
+
+        # try:
+        #     generate_hint(
+        #         note_type_name,
+        #         query,
+        #         flds_in_hint,
+        #         hint_field,
+        #         additional_hint_field,
+        #         sorting_key,
+        #         sorting_field,
+        #         separator=separator,
+        #         break_lines=break_lines,
+        #         cloze_field=cloze_field,
+        #     )
+        # except ValueError as e:
+        #     print(query, e)
+        #     continue

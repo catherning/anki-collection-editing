@@ -1,23 +1,23 @@
 # from datetime import datetime
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 from anki.collection import Collection
-from anki.models import ModelManager
-from anki.models import NotetypeDict
-from anki_utils import COL_PATH
+from anki.models import ModelManager, NotetypeDict
 from bs4 import BeautifulSoup
 from loguru import logger
-from utils import CLOZE_TYPE
-from utils import extract_cloze_deletion
-from utils import find_notes_to_change
-from utils import get_field_index
-from utils import print_note_content
-from utils import proceed
-from utils import truncate_field
+
+from anki_utils import COL_PATH
+from utils import (CLOZE_TYPE, extract_cloze_deletion, find_notes_to_change,
+                   get_field_index, print_note_content, proceed,
+                   truncate_field)
+
+# from nltk.corpus import stopwords
+# from nltk.tokenize import word_tokenize
+
 
 # from anki.notes import Note
-
+# TODO: make as arg
+# stop_words = set(stopwords.words('german'))
 
 def generate_global_hint(
     col: Collection,
@@ -70,8 +70,11 @@ def generate_global_hint(
             )
         else:
             for field in flds_in_hint:
-                text = BeautifulSoup(note[field], "html.parser").text
-                clean_text = truncate_field(text.replace("\n", separator), 60)
+                soup = BeautifulSoup(note[field], "html.parser")
+                for item in soup.select('span'):
+                    item.extract()
+                text = soup.text
+                clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
                 content += clean_text + separator
             sorting_info = BeautifulSoup(note[sorting_field], "html.parser").text
         note_hints.append((content, sorting_info))
@@ -102,7 +105,7 @@ def clean_hint(
         list[str]: The cleaned hints
     """
     note_hints_sorted = note_hints[:]
-    note_hints_sorted.sort(key=sorting_key)  # TODO: add sort field. Ex: pinyin
+    note_hints_sorted.sort(key=sorting_key)
     # Issue with sorting pinyin for now:
     # ex yunmi < yunan whereas it should be the opposite (yu<yun)
     note_hints_sorted = [el[0] for el in note_hints_sorted]
@@ -165,10 +168,18 @@ def adapt_hint_to_note(
                 if original_model["type"] == CLOZE_TYPE
                 else None
             )
-            hidding_char = BeautifulSoup(
+            soup = BeautifulSoup(
                 extract_cloze_deletion(cloze_field_index, note, additional_hint_field),
                 "html.parser",
-            ).text[0]
+            )
+            hidding_char = soup.text[0]
+            
+            # word_tokens = word_tokenize(soup.text)
+            # # converts the words in word_tokens to lower case and then checks whether 
+            # #they are present in stop_words or not
+            # hidding_char = next(w for w in word_tokens if w.lower() not in stop_words)
+            
+            
         else:
             try:
                 hidding_char = BeautifulSoup(
@@ -211,6 +222,7 @@ def generate_hint(
     sorting_key: Optional[Callable],
     sorting_field: Optional[str],
     cloze_field: Optional[str],
+    col: Optional[Collection] = None,
     separator: str = ", ",
     break_lines: bool = False,
     replace: bool = False,
@@ -239,7 +251,8 @@ def generate_hint(
     Raises:
         ValueError: If there is only 0 or 1 note found with the query
     """
-    col = Collection(COL_PATH)
+    if col is None:
+        col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(
         col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
     )
@@ -269,7 +282,10 @@ def generate_hint(
                 return int(row[1])
 
     except ValueError:
-        pass
+        if sorting_key is None:
+            def sorting_key(row):
+                return row[1].lower()
+            
 
     try:
         note_hints_sorted = clean_hint(
@@ -311,32 +327,8 @@ def generate_hint(
     col.close()
 
 
-# for nid in notesID:
-#     note = col.get_note(nid)
-#     for i,part in enumerate(parts):
-#         if part.find(content_to_hide)==0:
-# #TODO: change, when german, rule could change...
-# Check if no lines had the content to hide, is it really a synonym ? To notify user
-
-#             if note_type_name=="Chinois":
-#                 try:
-#                     soup = BeautifulSoup(note["Pinyin.1"],"html.parser")
-#                     plain_pinyin=soup.get_text(" ",strip=True)
-#                     parts[i] = plain_pinyin[0]
-#                 except IndexError:
-#                     r = requests.get((f'https://helloacm.com/api/'
-#                                   'pinyin/?cached&s={content_to_hide}')flak)
-#                     parts[i]=r.json()["result"][0][0]
-
-#             else:
-#                 parts[i] = "?"
-# #TODO: if option, get first letter of the content of field XXX. Else, just ?
-
-
 if __name__ == "__main__":
     note_type_name = "Chinois"
-
-    # query = ""  # '"Academy Award for Best Picture"'
     break_lines = False
 
     # TODO: Afterwards, for converted cloze to Basic, don't have to filter
@@ -353,32 +345,34 @@ if __name__ == "__main__":
 
     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
     i=0
-    col = Collection(COL_PATH)
+    # col = Collection(COL_PATH)
     while True:
         i+=1
         query = f'"Synonyms group:re:(^|, ){i}(,\W|$)"'
     
-        try:
-            notesID, original_model = find_notes_to_change(
-                col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
-            )
-        except ValueError:
-            print(f"No more synonym groups. Last group ID is {i-1}")
-            break
-
         # try:
-        #     generate_hint(
-        #         note_type_name,
-        #         query,
-        #         flds_in_hint,
-        #         hint_field,
-        #         additional_hint_field,
-        #         sorting_key,
-        #         sorting_field,
-        #         separator=separator,
-        #         break_lines=break_lines,
-        #         cloze_field=cloze_field,
+        #     notesID, original_model = find_notes_to_change(
+        #         col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
         #     )
-        # except ValueError as e:
-        #     print(query, e)
-        #     continue
+        # except ValueError:
+        #     print(f"No more synonym groups. Last group ID is {i-1}")
+        #     break
+
+        try:
+            generate_hint(
+                note_type_name,
+                query,
+                flds_in_hint,
+                hint_field,
+                additional_hint_field,
+                sorting_key,
+                sorting_field,
+                separator=separator,
+                break_lines=break_lines,
+                cloze_field=cloze_field,
+                # col=col,
+                replace = True
+            )
+        except ValueError as e:
+            print(query, e)
+            break

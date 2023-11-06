@@ -60,7 +60,7 @@ def find_notes_to_change(
             if verbose:
                 if original_model["type"] != CLOZE_TYPE:
                     logger.warning(
-                        "The fields of the note of Basic type are not emtpy "
+                        "The fields of the note of Basic type are not empty "
                         "and might be replaced"
                     )
                 # TODO: find cloze_text_field by getting the field with c1 ?

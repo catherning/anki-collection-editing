@@ -3,10 +3,10 @@ from typing import Callable, Optional
 
 from anki.collection import Collection
 from anki.models import ModelManager, NotetypeDict
+from anki_utils import COL_PATH
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from anki_utils import COL_PATH
 from utils import (CLOZE_TYPE, extract_cloze_deletion, find_notes_to_change,
                    get_field_index, print_note_content, proceed,
                    truncate_field)
@@ -18,6 +18,9 @@ from utils import (CLOZE_TYPE, extract_cloze_deletion, find_notes_to_change,
 # from anki.notes import Note
 # TODO: make as arg
 # stop_words = set(stopwords.words('german'))
+
+config = yaml.load(open("config.yaml"))
+COL_PATH = config["collection_path"]
 
 def generate_global_hint(
     col: Collection,
@@ -342,6 +345,7 @@ if __name__ == "__main__":
 
     separator = " | "  # should add spaces
     additional_hint_field = "Pinyin.1"  # "Movie winner"
+    # TODO: get the first letter of the main info (ex: for das Mädchen -> M, not d)
 
     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
     i=0

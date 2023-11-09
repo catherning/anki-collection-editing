@@ -3,3 +3,4 @@ __pycache__/
 anki_utils.py
 .vscode
 collection.anki2
+config.yaml

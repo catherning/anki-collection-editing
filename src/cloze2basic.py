@@ -1,9 +1,10 @@
 import re
 from typing import Optional
+import yaml
 
 from anki.collection import Collection
 from anki.models import NotetypeDict
-from anki_utils import COL_PATH
+
 from loguru import logger
 from utils import add_field
 from utils import CLOZE_TYPE
@@ -12,6 +13,10 @@ from utils import find_notes_to_change
 from utils import get_field_index
 from utils import proceed
 from utils import truncate_field
+
+
+config = yaml.load(open("config.yaml"))
+COL_PATH = config["collection_path"]
 
 if COL_PATH[-6:] != ".anki2":
     COL_PATH += "collection.anki2"

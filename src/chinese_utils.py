@@ -1,8 +1,12 @@
 import pinyin_jyutping
 from anki.collection import Collection
+import yaml
 
 from anki_utils import COL_PATH
 from utils import find_notes_to_change
+
+config = yaml.load(open("config.yaml"))
+COL_PATH = config["collection_path"]
 
 note_type_name = "Chinois"
 field_to_fill="Pinyin.1"

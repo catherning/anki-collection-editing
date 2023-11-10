@@ -79,7 +79,10 @@ def generate_global_hint(
                 text = soup.text
                 clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
                 content += clean_text + separator
+                
             sorting_info = BeautifulSoup(note[sorting_field], "html.parser").text
+            
+        content = content[:len(content)-len(separator)] # remove last separator that is useless
         note_hints.append((content, sorting_info))
 
     if c_err > 0:
@@ -135,6 +138,7 @@ def adapt_hint_to_note(
     hint_field: str,
     cloze_field: str,
     additional_hint_field: Optional[str],
+    additional_hint_func: Optional[function],
     replace: bool = False,
     # func=None,
 ) -> NotetypeDict:
@@ -165,34 +169,25 @@ def adapt_hint_to_note(
     if additional_hint_field is None:
         hidding_char = "?"
     else:
+        if additional_hint_func is None:
+            def additional_hint_func(text):
+                return text[0]
+        
         if original_model["type"] == CLOZE_TYPE:
-            cloze_field_index = (
-                get_field_index(original_model, cloze_field)
-                if original_model["type"] == CLOZE_TYPE
-                else None
-            )
-            soup = BeautifulSoup(
-                extract_cloze_deletion(cloze_field_index, note, additional_hint_field),
-                "html.parser",
-            )
-            hidding_char = soup.text[0]
-            
-            # word_tokens = word_tokenize(soup.text)
-            # # converts the words in word_tokens to lower case and then checks whether 
-            # #they are present in stop_words or not
-            # hidding_char = next(w for w in word_tokens if w.lower() not in stop_words)
-            
-            
+            cloze_field_index = get_field_index(original_model, cloze_field)
+            field_raw_text = extract_cloze_deletion(cloze_field_index, note, additional_hint_field)
         else:
             try:
-                hidding_char = BeautifulSoup(
-                    note[additional_hint_field], "html.parser"
-                ).text[0]
+                field_raw_text = note[additional_hint_field]
             except KeyError as e:
                 logger.error(
                     "The field from which you want a more precise hint is missing"
                 )
                 raise e
+                
+        field_text = BeautifulSoup(field_raw_text, "html.parser").text
+        hidding_char = additional_hint_func(field_text)
+
 
     hint = (
         "<br>".join(note_hints_sorted[:idx])
@@ -222,6 +217,7 @@ def generate_hint(
     flds_in_hint: list[str],
     hint_field: str,
     additional_hint_field: Optional[str],
+    additional_hint_func: Optional[function],
     sorting_key: Optional[Callable],
     sorting_field: Optional[str],
     cloze_field: Optional[str],
@@ -318,6 +314,7 @@ def generate_hint(
             hint_field,
             cloze_field,
             additional_hint_field,
+            additional_hint_func,
             replace
         )
         notes.append(note)
@@ -345,7 +342,11 @@ if __name__ == "__main__":
 
     separator = " | "  # should add spaces
     additional_hint_field = "Pinyin.1"  # "Movie winner"
+    
     # TODO: get the first letter of the main info (ex: for das Mädchen -> M, not d)
+    def additional_hint_func(text):
+        return text[0]
+    
 
     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
     i=0
@@ -361,6 +362,11 @@ if __name__ == "__main__":
         # except ValueError:
         #     print(f"No more synonym groups. Last group ID is {i-1}")
         #     break
+        
+                    # word_tokens = word_tokenize(soup.text)
+            # # converts the words in word_tokens to lower case and then checks whether 
+            # #they are present in stop_words or not
+            # hidding_char = next(w for w in word_tokens if w.lower() not in stop_words)
 
         try:
             generate_hint(
@@ -369,6 +375,7 @@ if __name__ == "__main__":
                 flds_in_hint,
                 hint_field,
                 additional_hint_field,
+                additional_hint_func,
                 sorting_key,
                 sorting_field,
                 separator=separator,

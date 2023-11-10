@@ -1,21 +1,16 @@
 import re
 from typing import Optional
-import yaml
 
+import yaml
 from anki.collection import Collection
 from anki.models import NotetypeDict
-
 from loguru import logger
-from utils import add_field
-from utils import CLOZE_TYPE
-from utils import extract_cloze_deletion
-from utils import find_notes_to_change
-from utils import get_field_index
-from utils import proceed
-from utils import truncate_field
 
+from utils import (CLOZE_TYPE, add_field, extract_cloze_deletion,
+                   find_notes_to_change, get_field_index, proceed,
+                   truncate_field)
 
-config = yaml.load(open("config.yaml"))
+config = yaml.load(open("src/config.yaml"))
 COL_PATH = config["collection_path"]
 
 if COL_PATH[-6:] != ".anki2":

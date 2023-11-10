@@ -1,9 +1,9 @@
 # from datetime import datetime
 from typing import Callable, Optional
 
+import yaml
 from anki.collection import Collection
 from anki.models import ModelManager, NotetypeDict
-from anki_utils import COL_PATH
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -19,7 +19,7 @@ from utils import (CLOZE_TYPE, extract_cloze_deletion, find_notes_to_change,
 # TODO: make as arg
 # stop_words = set(stopwords.words('german'))
 
-config = yaml.load(open("config.yaml"))
+config = yaml.load(open("src/config.yaml"))
 COL_PATH = config["collection_path"]
 
 def generate_global_hint(
@@ -138,7 +138,7 @@ def adapt_hint_to_note(
     hint_field: str,
     cloze_field: str,
     additional_hint_field: Optional[str],
-    additional_hint_func: Optional[function],
+    additional_hint_func: Optional[Callable],
     replace: bool = False,
     # func=None,
 ) -> NotetypeDict:
@@ -217,7 +217,7 @@ def generate_hint(
     flds_in_hint: list[str],
     hint_field: str,
     additional_hint_field: Optional[str],
-    additional_hint_func: Optional[function],
+    additional_hint_func: Optional[Callable],
     sorting_key: Optional[Callable],
     sorting_field: Optional[str],
     cloze_field: Optional[str],

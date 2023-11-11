@@ -190,6 +190,7 @@ for group in groups:
 - Handle the repetition of cloze field number (several {{c1:...}} in a Cloze)
 - Make the generation of hints as tables possible
 - Improve the search for the synonyms. For now, you need to manually group together (with a tag, flag or a specific enough query to filter only the wanted notes) the notes that are synonyms
+    => Automatically create the groups (synonyms or cognats) IDs
 - Clean code by using constants, and following OOP principles?
 
 ## Contributing

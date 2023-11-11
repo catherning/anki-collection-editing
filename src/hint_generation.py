@@ -11,13 +11,7 @@ from utils import (CLOZE_TYPE, extract_cloze_deletion, find_notes_to_change,
                    get_field_index, print_note_content, proceed,
                    truncate_field)
 
-# from nltk.corpus import stopwords
-# from nltk.tokenize import word_tokenize
-
-
-# from anki.notes import Note
 # TODO: make as arg
-# stop_words = set(stopwords.words('german'))
 
 config = yaml.load(open("src/config.yaml"))
 COL_PATH = config["collection_path"]
@@ -76,7 +70,7 @@ def generate_global_hint(
                 soup = BeautifulSoup(note[field], "html.parser")
                 for item in soup.select('span'):
                     item.extract()
-                text = soup.text
+                text = soup.get_text(" ")
                 clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
                 content += clean_text + separator
                 
@@ -338,35 +332,45 @@ if __name__ == "__main__":
     cloze_field = ""  # "Text"
     hint_field = "Synonyms"
     sorting_field = "Pinyin.1"
-    sorting_key = None  # lambda row: row[1]
+    
+    import nltk
+    from nltk.corpus import stopwords
+    from nltk.tokenize import word_tokenize
+    # import icu
+    # collator = icu.Collator.createInstance()
+    
+    try:
+        stop_words = set(stopwords.words('german'))
+    except LookupError:
+        nltk.download('stopwords')
+        stop_words = set(stopwords.words('german'))
+    
+    stop_words.update(("e","r","s"))
+    
+    def get_main_words(text):
+        word_tokens = word_tokenize(text)
+        return iter(w for w in word_tokens if w.lower() not in stop_words)
+    def sorting_key(hint_info):
+        return " ".join(get_main_words(hint_info[1]))
+    
+    sorting_key = None
 
-    separator = " | "  # should add spaces
+    separator = " "  # should add spaces
     additional_hint_field = "Pinyin.1"  # "Movie winner"
     
-    # TODO: get the first letter of the main info (ex: for das Mädchen -> M, not d)
+    # get the first letter of the main info (ex: for das Mädchen -> M, not d)
     def additional_hint_func(text):
-        return text[0]
+        return next(get_main_words(text))[0]
     
+    additional_hint_func = None
 
     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
     i=0
-    # col = Collection(COL_PATH)
     while True:
         i+=1
         query = f'"Synonyms group:re:(^|, ){i}(,\W|$)"'
     
-        # try:
-        #     notesID, original_model = find_notes_to_change(
-        #         col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
-        #     )
-        # except ValueError:
-        #     print(f"No more synonym groups. Last group ID is {i-1}")
-        #     break
         
-                    # word_tokens = word_tokenize(soup.text)
-            # # converts the words in word_tokens to lower case and then checks whether 
-            # #they are present in stop_words or not
-            # hidding_char = next(w for w in word_tokens if w.lower() not in stop_words)
 
         try:
             generate_hint(

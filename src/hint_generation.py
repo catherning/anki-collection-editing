@@ -1,6 +1,6 @@
 # from datetime import datetime
 from typing import Callable, Optional
-
+import re
 import yaml
 from anki.collection import Collection
 from anki.models import ModelManager, NotetypeDict
@@ -125,6 +125,7 @@ def clean_hint(
 
 def adapt_hint_to_note(
     col: Collection,
+    query: str, 
     note_hints_sorted: list[str],
     original_model: ModelManager,
     nid: int,
@@ -133,6 +134,8 @@ def adapt_hint_to_note(
     cloze_field: str,
     additional_hint_field: Optional[str],
     additional_hint_func: Optional[Callable],
+    query_field: Optional[str], #TODO: remove query or (query_field, group_separator) ?
+    group_separator: Optional[str],
     replace: bool = False,
     # func=None,
 ) -> NotetypeDict:
@@ -198,9 +201,25 @@ def adapt_hint_to_note(
     for el in hint.split("<br>"):
         print(el)
 
+    query_field = query.split(":")[0].replace('"','')
+    p = re.compile(r"(\d+)")
+    m = p.search(query)
+    if m:
+        current_group_ID = int(m.group(1))
+    
+    # If user wants to replace the hints from scratch, then we must check if current note was already edited with the script
+    # If they systematically want to append, not replace, then we skip the if below 
+    if "," in note[query_field] and replace:
+        note_groups = [int(el) for el in note[query_field].split(group_separator)]
+        if current_group_ID == min(note_groups):
+            replace = True
+        elif current_group_ID in note_groups:
+            replace = False
+
     if replace:
         note[hint_field] = hint
     else:
+        hint = "<br><br>" + hint
         note[hint_field] += hint
     return note
 
@@ -215,6 +234,8 @@ def generate_hint(
     sorting_key: Optional[Callable],
     sorting_field: Optional[str],
     cloze_field: Optional[str],
+    query_field: Optional[str],
+    group_separator: Optional[str],
     col: Optional[Collection] = None,
     separator: str = ", ",
     break_lines: bool = False,
@@ -301,6 +322,7 @@ def generate_hint(
     for nid, cur_note_hint in zip(notesID, note_hints):
         note = adapt_hint_to_note(
             col,
+            query,
             note_hints_sorted,
             original_model,
             nid,
@@ -309,7 +331,9 @@ def generate_hint(
             cloze_field,
             additional_hint_field,
             additional_hint_func,
-            replace
+            replace = replace,
+            query_field = query_field,
+            group_separator = group_separator
         )
         notes.append(note)
 
@@ -321,73 +345,80 @@ def generate_hint(
     col.close()
 
 
+
+
 if __name__ == "__main__":
-    note_type_name = "Chinois"
-    break_lines = False
+    
+    for note_type_name in ["Chinois","Allemand"]:
+        break_lines = False
 
-    # TODO: Afterwards, for converted cloze to Basic, don't have to filter
-    # by using the query, just the note type, AND the field where we have
-    # the constant value (ex: Author) to generate the hints
-    flds_in_hint = ["Simplified", "Meaning"]
-    cloze_field = ""  # "Text"
-    hint_field = "Synonyms"
-    sorting_field = "Pinyin.1"
-    
-    import nltk
-    from nltk.corpus import stopwords
-    from nltk.tokenize import word_tokenize
-    # import icu
-    # collator = icu.Collator.createInstance()
-    
-    try:
-        stop_words = set(stopwords.words('german'))
-    except LookupError:
-        nltk.download('stopwords')
-        stop_words = set(stopwords.words('german'))
-    
-    stop_words.update(("e","r","s"))
-    
-    def get_main_words(text):
-        word_tokens = word_tokenize(text)
-        return iter(w for w in word_tokens if w.lower() not in stop_words)
-    def sorting_key(hint_info):
-        return " ".join(get_main_words(hint_info[1]))
-    
-    sorting_key = None
+        cloze_field = ""  # "Text"
+        group_separator = ", "
 
-    separator = " "  # should add spaces
-    additional_hint_field = "Pinyin.1"  # "Movie winner"
-    
-    # get the first letter of the main info (ex: for das Mädchen -> M, not d)
-    def additional_hint_func(text):
-        return next(get_main_words(text))[0]
-    
-    additional_hint_func = None
+        match note_type_name:
+            case "Chinois":
+                flds_in_hint = ["Simplified", "Meaning"]
+                sorting_key = None
+                additional_hint_func = None
+                separator = " "
+                sorting_field = additional_hint_field = "Pinyin.1"
+            case "Allemand":
+                import nltk
+                from nltk.corpus import stopwords
+                from nltk.tokenize import word_tokenize
+                # import icu
+                # collator = icu.Collator.createInstance()
+                
+                try:
+                    stop_words = set(stopwords.words('german'))
+                except LookupError:
+                    nltk.download('stopwords')
+                    stop_words = set(stopwords.words('german'))
+                
+                stop_words.update(("e","r","s"))
+                
+                def get_main_words(text):
+                    word_tokens = word_tokenize(text)
+                    return iter(w for w in word_tokens if w.lower() not in stop_words)
+                        
+                def sorting_key(hint_info):
+                    return " ".join(get_main_words(hint_info[1]))
+                
+                def additional_hint_func(text):
+                    """Get the first letter of the main info (ex: for das Mädchen -> M, not d)"""
+                    return next(get_main_words(text))[0]
+                        
+                separator = " | "  # should add spaces
+                flds_in_hint = ["German", "French/English"]
+                sorting_field = additional_hint_field = "German"
 
-    # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-    i=0
-    while True:
-        i+=1
-        query = f'"Synonyms group:re:(^|, ){i}(,\W|$)"'
-    
-        
-
-        try:
-            generate_hint(
-                note_type_name,
-                query,
-                flds_in_hint,
-                hint_field,
-                additional_hint_field,
-                additional_hint_func,
-                sorting_key,
-                sorting_field,
-                separator=separator,
-                break_lines=break_lines,
-                cloze_field=cloze_field,
-                # col=col,
-                replace = True
-            )
-        except ValueError as e:
-            print(query, e)
-            break
+        for hint_field in ["Synonyms","Cognats"]:
+            query_field = f"{hint_field} group"
+                
+            # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+            i=0
+            while True:
+                i+=1
+                query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
+                
+                try:
+                    generate_hint(
+                        note_type_name,
+                        query,
+                        flds_in_hint,
+                        hint_field,
+                        additional_hint_field,
+                        additional_hint_func,
+                        sorting_key,
+                        sorting_field,
+                        separator=separator,
+                        break_lines=break_lines,
+                        cloze_field=cloze_field,
+                        # col=col,
+                        replace = True,
+                        query_field = query_field,
+                        group_separator = group_separator
+                    )
+                except ValueError as e:
+                    print(query, e)
+                    break

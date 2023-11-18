@@ -150,7 +150,9 @@ for album_cloze in clozes:
 ```
 
 When the query is correct, you can automatically run the script and always input `"Y"` with
-`yes Y | python src/cloze2basic.py`
+`yes Y | python src/cloze2basic.py` in `Linux`
+or 
+`, 'Y' * 200 | python src/cloze2basic.py` in `Powershell`
 
 
 #### Generate hints

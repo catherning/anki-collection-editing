@@ -3,7 +3,7 @@ import yaml
 from anki.collection import Collection
 from anki_utils import COL_PATH
 
-from utils import find_notes_to_change
+from src.utils.note_utils import find_notes_to_change
 
 config = yaml.load(open("src/config.yaml"))
 COL_PATH = config["collection_path"]

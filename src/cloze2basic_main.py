@@ -4,9 +4,9 @@ import yaml
 from anki.collection import Collection
 from loguru import logger
 
-from utils import (add_field, find_notes_to_change)
-from note_utils import create_note_type, change_note_type, extract_info_from_cloze_deletion
-from constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
+from src.utils.field_utils import add_field
+from src.utils.note_utils import find_notes_to_change, create_note_type, change_note_type, extract_info_from_cloze_deletion
+from src.utils.constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
 
 def cloze2Basic(
     query: str,

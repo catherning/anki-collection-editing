@@ -1,5 +1,5 @@
 # from src.utils import add_field
-from src.utils import truncate_field
+from src.field_utils import truncate_field
 
 
 def test_short_field():

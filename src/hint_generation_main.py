@@ -5,10 +5,11 @@ from anki.collection import Collection
 from loguru import logger
 from german_utils import romanic_additional_hint_func, romanic_sorting_key
 
-from hint_generation_utils import (get_field_index, generate_global_hint,
+from src.utils.hint_generation_utils import (get_field_index, generate_global_hint,
                                    clean_hint, adapt_hint_to_note)
-from utils import find_notes_to_change
-from constants import CLOZE_TYPE
+from src.utils.note_utils import find_notes_to_change
+from src.utils.constants import CLOZE_TYPE
+
 # TODO: make as arg
 
 def generate_hint_main(

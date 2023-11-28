@@ -5,10 +5,10 @@ from anki.collection import Collection
 from anki.models import NotetypeDict
 from loguru import logger
 
-from utils import (add_field, extract_cloze_deletion,
+from src.utils.field_utils import (add_field, extract_cloze_deletion,
                    get_field_index, proceed,
-                   truncate_field)
-from constants import FIELD_WITH_ORIGINAL_CLOZE
+                   truncate_field, print_note_content)
+from src.utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
 
 def create_note_type(
@@ -184,3 +184,56 @@ def extract_info_from_cloze_deletion(
         notes.append(note)
         
     return notes
+
+
+def find_notes_to_change(
+    col: Collection,
+    query: str = "",
+    note_type_name: str = "Cloze",
+    verbose: bool = True,
+    cloze_text_field: str = "Text",
+) -> tuple[list[int], NotetypeDict | None]:
+    """Retrieves the notes to change according to a query.
+
+    Args:
+        col (Collection): The full Anki collection with all models and notes
+        query (str): Query to use to find the notes to change
+        note_type_name (str, optional): Name of the note type. Defaults to "Cloze".
+        verbose: To show more information on the notes found. Defaults to True
+        cloze_text_field: Field name containing the cloze note. Defaults to "Text"
+
+    Raises:
+        ValueError: If no note was found (because the query or note type name
+        is wrong)
+
+    Returns:
+        list[int]: The list of the IDs of the notes to convert
+    """
+
+    # Get the notes to edit
+    new_query = query + f' note:"{note_type_name}"'
+    notesID = col.find_notes(new_query)
+
+    if len(notesID) == 0:
+        raise ValueError("No notes found. Please review your query and cloze note type")
+    else:
+        logger.info(f"Number of notes found: {len(notesID)}")
+        original_modelID = col.models.get_single_notetype_of_notes(notesID)
+        original_model = col.models.get(original_modelID)
+        for note in notesID:
+            note_details = col.get_note(note)
+
+            if verbose:
+                if original_model["type"] != CLOZE_TYPE:
+                    logger.warning(
+                        "The fields of the note of Basic type are not empty "
+                        "and might be replaced"
+                    )
+                # TODO: find cloze_text_field by getting the field with c1 ?
+                logger.info(
+                    print_note_content(cloze_text_field, original_model, note_details)
+                )
+
+        proceed()
+    return list(notesID), original_model
+

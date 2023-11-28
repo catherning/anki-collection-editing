@@ -1,5 +1,6 @@
 import re
 from typing import Optional
+import yaml
 
 from anki.collection import Collection
 from anki.models import NotetypeDict
@@ -10,6 +11,14 @@ from src.utils.field_utils import (add_field, extract_cloze_deletion,
                    truncate_field, print_note_content)
 from src.utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
+
+def get_col_path(config_path):
+    config = yaml.load(open(config_path))
+    COL_PATH = config["collection_path"]
+
+    if COL_PATH[-6:] != ".anki2":
+        COL_PATH += "collection.anki2"
+    return COL_PATH
 
 def create_note_type(
     col: Collection,

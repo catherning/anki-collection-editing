@@ -5,10 +5,11 @@ from anki.collection import Collection
 from loguru import logger
 
 from src.utils.field_utils import add_field
-from src.utils.note_utils import find_notes_to_change, create_note_type, change_note_type, extract_info_from_cloze_deletion
+from src.utils.note_utils import find_notes_to_change, create_note_type, change_note_type, extract_info_from_cloze_deletion, get_col_path
 from src.utils.constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
 
 def cloze2Basic(
+    COL_PATH: str,
     query: str,
     new_type_name: str,
     new_fields: Optional[list[tuple[str, str]]],
@@ -107,17 +108,15 @@ def cloze2Basic(
 
 
 if __name__ == "__main__":
-    config = yaml.load(open("src/config.yaml"))
-    COL_PATH = config["collection_path"]
-
-    if COL_PATH[-6:] != ".anki2":
-        COL_PATH += "collection.anki2"
+    COL_PATH = get_col_path("src/config.yaml")
     
     # TODO: when code is correct, use args instead (don't need to debug)
     new_type_name = "Music"
     original_type_name = "Cloze"  # "Cloze Music & Sport" # "Olympic winners bis"
 
     clozes = ["c1", "c2", "c3"]
+    
+    # TODO: make a method for that
     for original_type_name, extra_field in zip(
         ["Cloze", "Cloze Music & Sport"], ["Extra", "Back Extra"]
     ):
@@ -149,6 +148,7 @@ if __name__ == "__main__":
 
                     try:
                         cloze2Basic(
+                            COL_PATH, 
                             query=query,
                             new_type_name=new_type_name,
                             new_fields=new_fields,

@@ -7,12 +7,13 @@ from german_utils import romanic_additional_hint_func, romanic_sorting_key
 
 from src.utils.hint_generation_utils import (get_field_index, generate_global_hint,
                                    clean_hint, adapt_hint_to_note)
-from src.utils.note_utils import find_notes_to_change
+from src.utils.note_utils import find_notes_to_change, get_col_path
 from src.utils.constants import CLOZE_TYPE
 
 # TODO: make as arg
 
 def generate_hint_main(
+    COL_PATH: str,
     note_type_name: str,
     query: str,
     flds_in_hint: list[str],
@@ -134,9 +135,7 @@ def generate_hint_main(
 
 
 if __name__ == "__main__":
-    
-    config = yaml.load(open("src/config.yaml"))
-    COL_PATH = config["collection_path"]
+    COL_PATH = get_col_path("src/config.yaml")
     
     for note_type_name in ["Chinois","Allemand"]:
         break_lines = False
@@ -171,6 +170,7 @@ if __name__ == "__main__":
                 
                 try:
                     generate_hint_main(
+                        COL_PATH,
                         note_type_name,
                         query,
                         flds_in_hint,

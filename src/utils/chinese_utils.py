@@ -3,13 +3,12 @@ import yaml
 from anki.collection import Collection
 from anki_utils import COL_PATH
 
-from src.utils.note_utils import find_notes_to_change
+from src.utils.note_utils import find_notes_to_change, get_col_path
 
-config = yaml.load(open("src/config.yaml"))
-COL_PATH = config["collection_path"]
+COL_PATH = get_col_path("src/config.yaml")
 
 ## Get pinyin of characters to fill into a note field
-def fill_pinyin(note_type_name, field_to_fill, source_field, query):
+def fill_pinyin(COL_PATH, note_type_name, field_to_fill, source_field, query):
     col = Collection(COL_PATH)
     notesID, original_model = find_notes_to_change(
     col, query, note_type_name, verbose=True, cloze_text_field=source_field
@@ -32,4 +31,4 @@ if __name__ == "__main__":
     field_to_fill="Pinyin.1"
     source_field = "Simplified"
     query=f"{field_to_fill}:"
-    fill_pinyin(note_type_name, field_to_fill, source_field, query)
+    fill_pinyin(COL_PATH, note_type_name, field_to_fill, source_field, query)

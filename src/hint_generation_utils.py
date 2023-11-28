@@ -6,9 +6,10 @@ from anki.models import ModelManager, NotetypeDict
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from utils import (CLOZE_TYPE, extract_cloze_deletion,
+from utils import (extract_cloze_deletion,
                    get_field_index, print_note_content, proceed, get_cloze_data, get_field_data,
                    breaklines_by_number)
+from constants import CLOZE_TYPE
 
 def generate_global_hint(
     col: Collection,

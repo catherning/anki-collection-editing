@@ -4,11 +4,9 @@ import yaml
 from anki.collection import Collection
 from loguru import logger
 
-from utils import (CLOZE_TYPE, add_field, extract_cloze_deletion,
-                   find_notes_to_change, get_field_index, proceed,
-                   truncate_field)
-from cloze_utils import create_note_type, change_note_type, extract_info_from_cloze_deletion
-
+from utils import (add_field, find_notes_to_change)
+from note_utils import create_note_type, change_note_type, extract_info_from_cloze_deletion
+from constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
 
 def cloze2Basic(
     query: str,
@@ -68,7 +66,7 @@ def cloze2Basic(
     if original_model["type"] == CLOZE_TYPE:
         # If the user doesn't map the Text field to a target field, we do it
         if not [el for el in new_fields if cloze_text_field in el[1]]:
-            new_fields.append(("Original cloze text", cloze_text_field))
+            new_fields.append((FIELD_WITH_ORIGINAL_CLOZE, cloze_text_field))
 
         # Resume a conversion if the new type was already created before
         new_note_type = col.models.by_name(new_type_name)
@@ -91,9 +89,21 @@ def cloze2Basic(
     else:
         new_note_type = original_model
 
-    extract_info_from_cloze_deletion(
+    edited_notes = extract_info_from_cloze_deletion(
         col, notesID, new_note_type, new_fields, original_field_list, cloze_text_field
     )
+    
+    logger.info("Confirm the mappings and save notes ? (Y/n)")
+    if input() == "Y":
+        col.update_notes(edited_notes)
+        logger.success("New notes created and saved in the collection!")
+    else:
+        logger.warning(
+            "The note field extraction was not saved. But the notes were already"
+            " converted."
+        )
+    col.close()
+
 
 
 if __name__ == "__main__":
@@ -135,7 +145,7 @@ if __name__ == "__main__":
                         + year_cloze
                         + r"::\d{4}"
                     )  # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' #
-                    cloze_text_field = "Text"  # "Original cloze text"
+                    cloze_text_field = "Text"  # FIELD_WITH_ORIGINAL_CLOZE
 
                     try:
                         cloze2Basic(

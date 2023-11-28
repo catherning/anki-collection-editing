@@ -5,9 +5,10 @@ from anki.collection import Collection
 from anki.models import NotetypeDict
 from loguru import logger
 
-from utils import (CLOZE_TYPE, add_field, extract_cloze_deletion,
-                   find_notes_to_change, get_field_index, proceed,
+from utils import (add_field, extract_cloze_deletion,
+                   get_field_index, proceed,
                    truncate_field)
+from constants import FIELD_WITH_ORIGINAL_CLOZE
 
 
 def create_note_type(
@@ -154,8 +155,8 @@ def extract_info_from_cloze_deletion(
         cloze_text_field (str, optional): The name of the field with cloze text.
         Defaults to "Text".
     """
-
-    if "Original cloze text" == new_fields[-1][0]:
+    
+    if FIELD_WITH_ORIGINAL_CLOZE == new_fields[-1][0]:
         field_to_extract_index = -1
     else:
         field_to_extract_index = get_field_index(new_note_type, cloze_text_field)
@@ -181,14 +182,5 @@ def extract_info_from_cloze_deletion(
             f"Final fields of the note: {[truncate_field(fld) for fld in note.fields]}"
         )
         notes.append(note)
-
-    logger.info("Confirm the mappings and save notes ? (Y/n)")
-    if input() == "Y":
-        col.update_notes(notes)
-        logger.success("New notes created and saved in the collection!")
-    else:
-        logger.warning(
-            "The note field extraction was not saved. But the notes were already"
-            " converted."
-        )
-    col.close()
+        
+    return notes

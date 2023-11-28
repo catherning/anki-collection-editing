@@ -6,10 +6,10 @@ from anki.collection import Collection
 from anki.models import NotetypeDict
 from loguru import logger
 
-from src.utils.field_utils import (add_field, extract_cloze_deletion,
+from utils.field_utils import (add_field, extract_cloze_deletion,
                    get_field_index, proceed,
                    truncate_field, print_note_content)
-from src.utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
+from utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
 
 def get_col_path(config_path):

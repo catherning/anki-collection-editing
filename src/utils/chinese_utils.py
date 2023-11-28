@@ -3,7 +3,7 @@ import yaml
 from anki.collection import Collection
 from anki_utils import COL_PATH
 
-from src.utils.note_utils import find_notes_to_change, get_col_path
+from utils.note_utils import find_notes_to_change, get_col_path
 
 COL_PATH = get_col_path("src/config.yaml")
 

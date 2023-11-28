@@ -181,8 +181,7 @@ if __name__ == "__main__":
                         sorting_field,
                         separator=separator,
                         break_lines=break_lines,
-                        cloze_field=cloze_field,
-                        # col=col,
+                        # cloze_field=cloze_field,
                         replace = True,
                         query_field = query_field,
                         group_separator = group_separator

@@ -1,11 +1,7 @@
-import yaml
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
-
-config = yaml.load(open("src/config.yaml"))
-COL_PATH = config["collection_path"]
 # import icu
 # collator = icu.Collator.createInstance()
 

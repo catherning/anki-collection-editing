@@ -13,7 +13,8 @@ from utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
 
 def get_col_path(config_path):
-    config = yaml.load(open(config_path))
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
     COL_PATH = config["collection_path"]
 
     if COL_PATH[-6:] != ".anki2":
@@ -201,6 +202,7 @@ def find_notes_to_change(
     note_type_name: str = "Cloze",
     verbose: bool = True,
     cloze_text_field: str = "Text",
+    override_confirmation: bool = False,
 ) -> tuple[list[int], NotetypeDict | None]:
     """Retrieves the notes to change according to a query.
 
@@ -243,6 +245,7 @@ def find_notes_to_change(
                     print_note_content(cloze_text_field, original_model, note_details)
                 )
 
-        proceed()
+        if not override_confirmation:
+            proceed()
     return list(notesID), original_model
 

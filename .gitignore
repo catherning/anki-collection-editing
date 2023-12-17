@@ -4,3 +4,4 @@ anki_utils.py
 .vscode
 collection.anki2
 config.yaml
+collection.anki2-wal

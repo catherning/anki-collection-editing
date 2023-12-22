@@ -18,13 +18,13 @@ def generate_hint_main(
     query: str,
     flds_in_hint: list[str],
     hint_field: str,
-    additional_hint_field: Optional[str],
-    additional_hint_func: Optional[Callable],
-    sorting_key: Optional[Callable],
-    sorting_field: Optional[str],
-    cloze_field: Optional[str],
-    query_field: Optional[str],
-    group_separator: Optional[str],
+    additional_hint_field: Optional[str]=None,
+    additional_hint_func: Optional[Callable]=None,
+    sorting_key: Optional[Callable]=None,
+    sorting_field: Optional[str]=None,
+    cloze_field: Optional[str]=None,
+    query_field: Optional[str]=None,
+    group_separator: Optional[str]=None,
     col: Optional[Collection] = None,
     separator: str = ", ",
     break_lines: bool = False,
@@ -137,7 +137,7 @@ def generate_hint_main(
 if __name__ == "__main__":
     COL_PATH = get_col_path("src/config.yaml")
     
-    for note_type_name in ["Chinois","Allemand"]:
+    for note_type_name in ["Best Pictures"]: #"Chinois","Allemand"]:
         break_lines = False
 
         cloze_field = ""  # "Text"
@@ -158,16 +158,21 @@ if __name__ == "__main__":
                 flds_in_hint = ["German", "French/English"]
                 separator = " | "  # should add spaces
                 sorting_field = additional_hint_field = "German"
+        
+            case "Best Pictures":
+                sorting_key = None
+                additional_hint_func = None
+                flds_in_hint = ["Year", "Movie winner"]
+                separator = " "
+                sorting_field = "Year"
+                additional_hint_field = "Movie winner"
+                hint_field = "Extra"
 
-        for hint_field in ["Synonyms","Cognats"]:
-            query_field = f"{hint_field} group"
-                
-            # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-            i=0
-            while True:
-                i+=1
-                query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-                
+
+        for cent in ["19","20"]:
+            for i in range(10):
+                query_field = "Year"
+                query = f'{query_field}:{cent}{i}*'
                 try:
                     generate_hint_main(
                         COL_PATH,
@@ -184,8 +189,41 @@ if __name__ == "__main__":
                         # cloze_field=cloze_field,
                         replace = True,
                         query_field = query_field,
-                        group_separator = group_separator
+                        # group_separator = group_separator
                     )
                 except ValueError as e:
                     print(query, e)
-                    break
+                    continue
+
+                
+
+        # for hint_field in ["Synonyms","Cognats"]:
+        #     query_field = f"{hint_field} group"
+                
+        #     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+        #     i=0
+        #     while True:
+        #         i+=1
+        #         query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
+                
+        #         try:
+        #             generate_hint_main(
+        #                 COL_PATH,
+        #                 note_type_name,
+        #                 query,
+        #                 flds_in_hint,
+        #                 hint_field,
+        #                 additional_hint_field,
+        #                 additional_hint_func,
+        #                 sorting_key,
+        #                 sorting_field,
+        #                 separator=separator,
+        #                 break_lines=break_lines,
+        #                 # cloze_field=cloze_field,
+        #                 replace = True,
+        #                 query_field = query_field,
+        #                 group_separator = group_separator
+        #             )
+        #         except ValueError as e:
+        #             print(query, e)
+        #             break

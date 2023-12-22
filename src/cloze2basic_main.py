@@ -111,39 +111,32 @@ if __name__ == "__main__":
     COL_PATH = get_col_path("src/config.yaml")
     
     # TODO: when code is correct, use args instead (don't need to debug)
-    new_type_name = "Music"
+    new_type_name = "Best Pictures"
     original_type_name = "Cloze"  # "Cloze Music & Sport" # "Olympic winners bis"
 
-    clozes = ["c1", "c2", "c3"]
+    clozes = ["c1", "c2"]
     
     # TODO: make a method for that
     for original_type_name, extra_field in zip(
-        ["Cloze", "Cloze Music & Sport"], ["Extra", "Back Extra"]
+        ["Cloze",], # "Cloze Music & Sport"], 
+        ["Extra",] # "Back Extra"]
     ):
-        for album_cloze in clozes:
+        for movie_cloze in clozes:
             for year_cloze in clozes:
-                for group_cloze in clozes:
                     if (
-                        album_cloze == year_cloze
-                        or album_cloze == group_cloze
-                        or year_cloze == group_cloze
+                        movie_cloze == year_cloze
                     ):
                         continue
 
-                    print(f"{album_cloze=} {year_cloze=} {group_cloze=}")
+                    logger.info(f"{movie_cloze=} {year_cloze=}")
                     new_fields = [
-                        ("Album", album_cloze),
+                        ("Movie winner", movie_cloze),
                         ("Year", year_cloze),
-                        ("Group", group_cloze),
                         ("Extra", extra_field),
                     ]
-                    query = (
-                        "album re:"
-                        + album_cloze
-                        + r".*c\d.*c\d re:\{\{"
-                        + year_cloze
-                        + r"::\d{4}"
-                    )  # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' #
+                    query = f'"Best Picture" re:{year_cloze}::\d{{4}}'
+                      # re:c\d.*c\d.*c\d "re:\{\{c2::\d"' 
+                    logger.info(f"Anki query: {query}")
                     cloze_text_field = "Text"  # FIELD_WITH_ORIGINAL_CLOZE
 
                     try:

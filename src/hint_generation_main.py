@@ -3,7 +3,7 @@ from typing import Callable, Optional
 import yaml
 from anki.collection import Collection
 from loguru import logger
-from german_utils import romanic_additional_hint_func, romanic_sorting_key
+from src.utils.german_utils import romanic_additional_hint_func, romanic_sorting_key
 
 from src.utils.hint_generation_utils import (get_field_index, generate_global_hint,
                                    clean_hint, adapt_hint_to_note)

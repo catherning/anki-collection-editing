@@ -6,10 +6,10 @@ from anki.models import ModelManager, NotetypeDict
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from utils.field_utils import (extract_cloze_deletion,
+from src.utils.field_utils import (extract_cloze_deletion,
                    get_field_index, print_note_content, proceed, get_cloze_data, get_field_data,
                    breaklines_by_number)
-from utils.constants import CLOZE_TYPE
+from src.utils.constants import CLOZE_TYPE
 
 def generate_global_hint(
     col: Collection,
@@ -62,6 +62,9 @@ def generate_global_hint(
     return note_hints
 
 def append_if_not_first_group(query, group_separator, replace, note):
+    if not group_separator:
+        return replace
+
     query_field = query.split(":")[0].replace('"','')
     p = re.compile(r"(\d+)")
     m = p.search(query)

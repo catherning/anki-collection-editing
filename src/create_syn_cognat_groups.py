@@ -3,7 +3,7 @@ from typing import Callable, Optional
 from anki.collection import Collection
 from loguru import logger
 
-from utils.note_utils import find_notes_to_change, get_col_path
+from src.utils.note_utils import find_notes_to_change, get_col_path
 
 # TODO: make as arg
 

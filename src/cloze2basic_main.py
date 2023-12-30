@@ -5,7 +5,7 @@ from anki.collection import Collection
 from loguru import logger
 
 from src.utils.field_utils import add_field
-from src.utils.note_utils import find_notes_to_change, create_note_type, change_note_type, extract_info_from_cloze_deletion, get_col_path
+from src.utils.note_utils import find_notes, create_note_type, change_note_type, extract_info_from_cloze_deletion, get_col_path
 from src.utils.constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
 
 def cloze2Basic(
@@ -35,7 +35,7 @@ def cloze2Basic(
     """
     col = Collection(COL_PATH)
 
-    notesID, original_model = find_notes_to_change(
+    notesID, original_model = find_notes(
         col,
         query=query,
         note_type_name=original_type_name,

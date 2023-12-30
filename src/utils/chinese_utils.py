@@ -3,14 +3,14 @@ import yaml
 from anki.collection import Collection
 from anki_utils import COL_PATH
 
-from src.utils.note_utils import find_notes_to_change, get_col_path
+from src.utils.note_utils import find_notes, get_col_path
 
 COL_PATH = get_col_path("src/config.yaml")
 
 ## Get pinyin of characters to fill into a note field
 def fill_pinyin(COL_PATH, note_type_name, field_to_fill, source_field, query):
     col = Collection(COL_PATH)
-    notesID, original_model = find_notes_to_change(
+    notesID, original_model = find_notes(
     col, query, note_type_name, verbose=True, cloze_text_field=source_field
 )
     p = pinyin_jyutping.PinyinJyutping()

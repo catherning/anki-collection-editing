@@ -196,7 +196,7 @@ def extract_info_from_cloze_deletion(
     return notes
 
 
-def find_notes_to_change(
+def find_notes(
     col: Collection,
     query: str = "",
     note_type_name: str = "Cloze",
@@ -204,11 +204,11 @@ def find_notes_to_change(
     cloze_text_field: str = "Text",
     override_confirmation: bool = False,
 ) -> tuple[list[int], NotetypeDict | None]:
-    """Retrieves the notes to change according to a query.
+    """Retrieves the notes according to a query.
 
     Args:
         col (Collection): The full Anki collection with all models and notes
-        query (str): Query to use to find the notes to change
+        query (str): Query to use to find the notes
         note_type_name (str, optional): Name of the note type. Defaults to "Cloze".
         verbose: To show more information on the notes found. Defaults to True
         cloze_text_field: Field name containing the cloze note. Defaults to "Text"
@@ -218,7 +218,8 @@ def find_notes_to_change(
         is wrong)
 
     Returns:
-        list[int]: The list of the IDs of the notes to convert
+        list[int]: The list of the IDs of the notes
+        NotetypeDict: The common type of the notes
     """
 
     # Get the notes to edit

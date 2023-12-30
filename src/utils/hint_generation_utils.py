@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from loguru import logger
 
 from src.utils.field_utils import (extract_cloze_deletion,
-                   get_field_index, print_note_content, proceed, get_cloze_data, get_field_data,
+                   get_field_index, print_note_content, proceed, get_cloze_data, get_cleaned_field_data,
                    breaklines_by_number)
 from src.utils.constants import CLOZE_TYPE
 
@@ -49,7 +49,7 @@ def generate_global_hint(
                 cloze_field_index, note, sorting_field
             )
         else:
-            content = get_field_data(separator, note, flds_in_hint)  
+            content = get_cleaned_field_data(separator, note, flds_in_hint)  
             sorting_info = BeautifulSoup(note[sorting_field], "html.parser").text
             
         content = content[:len(content)-len(separator)] # remove last separator that is useless

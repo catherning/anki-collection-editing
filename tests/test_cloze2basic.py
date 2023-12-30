@@ -3,7 +3,7 @@ import sys
 # import pytest
 
 sys.path.insert(0, "./src")
-# from src.cloze2basic import find_notes_to_change, create_note_type
+# from src.cloze2basic import find_notes, create_note_type
 
 
 def test_create_note_type_valid_input(mocker):

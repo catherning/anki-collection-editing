@@ -162,7 +162,7 @@ This script will generate the hints as the list of the albums done by a music gr
 ```python
 # Get the list of the unique music groups
 col = Collection(COL_PATH)
-notesID, original_model = find_notes_to_change(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
+notesID, original_model = find_notes(col,query, note_type_name,verbose=True, cloze_text_field=cloze_field)
 groups = []
 for noteID in notesID:
     note = col.get_note(noteID)

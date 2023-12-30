@@ -95,16 +95,20 @@ def get_cloze_data(flds_in_hint, cloze_field_index, separator, sorting_field, c_
                 # TODO: warnings / error if cloze type but fields given or the opposite
     return content
 
-def get_field_data(separator, note, flds_in_hint):
+def extract_text_from_field(note, field):
+    soup = BeautifulSoup(note[field], "html.parser")
+    for item in soup.select('span'):
+        item.extract()
+    return soup.get_text(" ")
+
+def get_cleaned_field_data(separator, note, flds_in_hint):
     content = ""
     for field in flds_in_hint:
-        soup = BeautifulSoup(note[field], "html.parser")
-        for item in soup.select('span'):
-            item.extract()
-        text = soup.get_text(" ")
+        text = extract_text_from_field(note, field)
         clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
         content += clean_text + separator
     return content
+
 
 def breaklines_by_number(note_hints_sorted):
     note_hints_spaced = []

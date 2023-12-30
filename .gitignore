@@ -5,3 +5,4 @@ anki_utils.py
 collection.anki2
 config.yaml
 collection.anki2-wal
+anki-collection-editing.code-workspace

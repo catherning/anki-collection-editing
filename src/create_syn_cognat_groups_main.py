@@ -54,8 +54,9 @@ for noteID in notesID:
     note = col.get_note(noteID)
     print(note[main_signification_field])
     
+    # Easiest to most difficult cases:
+    # If it's already in a group that I created manually : 
     if note[hint_field] and not note[f"{hint_field} group"]:
-        # It's a group that I created manually : 
         # just need to find the other notes in the group and create the group ID
         print(note[hint_field])
         hints = note[hint_field].split()
@@ -86,13 +87,17 @@ for noteID in notesID:
             case "Allemand":
                 lines = field_text.splitlines()
                 group_elements = [line for line in lines if detect(line) == 'de']
-       
+    
     
     elif note[hint_field] and note[f"{hint_field} group"]:
         # The group ID is already set: what do I need to edit?
         pass
+    elif not note[hint_field] :   
+        # It's not in a group yet.
+        # Either I just need to find the group
+        pass
     else:
-        # It's a new group to create
+        # It's a new group to create. I need to find the synonyms automatically (using LLM embeddings ?)
         pass
     
 print(len(notesID))

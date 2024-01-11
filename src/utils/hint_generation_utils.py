@@ -15,20 +15,39 @@ from src.utils.constants import CLOZE_TYPE
 class HintGenerator:
     def __init__(self, 
                  flds_in_hint:list[str], 
-                 col_path:str, 
-                 notesID:list[int],
+                 col_path:Optional[str]=None, 
                  col:Optional[Collection]=None,
                  hint_holding_field: Optional[str]= "Extra", # make obligatory as if it's the default 
                     # and it doesn't exists, might throw error?
                  sorting_field:Optional[str]=None,
                  sorting_key: Optional[Callable]=None,
                  separator:Optional[str]=", ", 
+                 replace:Optional[bool] = False,
+                 query_field: Optional[str]=None,
                  cloze_field:Optional[int]=None, 
-                 group_separator:Optional[str]=None
+                 group_separator:Optional[str]=None,
+                 break_lines: bool = False,
                  ):
-        
+        # col (Collection): The Anki collection
+        # note_hints_sorted (list[str]): The cleaned global hint
+        # original_model (ModelManager): The type of the note
+        # nicled (int): The ID of the note
+        # cur_note_hint (str): The hint corresponding to the current note
+        # hint_holding_field (str): The field that will be populated with the hint
+        # cloze_field (str): The field with the cloze text (only for
+        # logging purposes)
+        # additional_hint_field (Optional[str]): The field with the eventual
+        # additional hint.
+        # If not given, then we hide the hint info with '?'. Otherwise, for now,
+        # we show the first character of the info in the additional_hint_field
+        # break_lines (bool, optional): If you want breaklines. For now it only works
+        # if the sorting field is numerical (years) and it add breaklines between decades.
+        # Defaults to False.
+
         self.col = Collection(col_path) if col is None else col
-        self.notesID = notesID
+        if self.col is None:
+            raise ValueError("You must provide either col_path or col")
+        self.original_model = None
         self.hint_holding_field = hint_holding_field
         self.flds_in_hint = flds_in_hint
         self.sorting_field = sorting_field
@@ -37,21 +56,21 @@ class HintGenerator:
         self.cloze_field = cloze_field # TODO: get cloze_field_index here once and for all?
         self.group_separator = group_separator
         self.note_hints_sorted = []
+        self.query_field = query_field
+        self.replace = replace
+        self.break_lines = break_lines
         
         
-    def default_text_sorting_key(row):
+    def default_text_sorting_key(self,row):
         return row[1].lower()
     
-    def default_int_sorting_key(row):
+    def default_int_sorting_key(self,row):
         return int(row[1])
                 
     def run(
         self,
         note_type_name: str,
         query: str,
-        cloze_field: Optional[str]=None,
-        break_lines: bool = False,
-        replace: bool = False,
     ) -> None:
         """Main method to generate hints for several notes using their information.
 
@@ -68,23 +87,17 @@ class HintGenerator:
             cloze_field (Optional[str]): The name of the cloze field if notes are Cloze.
             separator (str, optional): The string to separate the info from flds_in_hint.
             Defaults to ", ".
-            break_lines (bool, optional): If you want breaklines. For now it only works
-            if the sorting field is numerical (years) and it add breaklines between decades.
-            Defaults to False.
-            replace (bool, optional): If you want to replace, not append the hing field.
-            Defaults to False.
 
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
         
-        notesID, _, _, hint = self.generate_clean_hint(note_type_name, query, cloze_field, break_lines)
-
+        hint = self.generate_clean_hint(note_type_name, query)
         notes = []
-        for nid in notesID:
+        for nid in self.notesID:
             # TODO: check if ok
             note = self.col.get_note(nid)
-            note[self.hint_holding_field] = hint
+            note[self.hint_holding_field] = hint if self.replace else note[self.hint_holding_field] + hint
             notes.append(note)
 
         logger.info("Confirm the hint generation and save notes ? (Y/n)")
@@ -94,22 +107,22 @@ class HintGenerator:
 
         self.col.close()
 
-    def generate_clean_hint(self, note_type_name, query, cloze_field, break_lines):
+    def generate_clean_hint(self, note_type_name, query):
         # TODO: see what to return bw note_hints_sorted and hint? if HintGen, only need hint because identical
         # If HintAdaptor, need note_hints_sorted bc need to adapt to each note afterwards
         
-        notesID, original_model = find_notes(
-            self.col, query, note_type_name, verbose=True, cloze_text_field=cloze_field
+        self.notesID, self.original_model = find_notes(
+            self.col, query, note_type_name, verbose=True, cloze_text_field=self.cloze_field
         )
 
-        if len(notesID) < 2:
+        if len(self.notesID) < 2:
             raise ValueError(
                 "There is only one note. You can't generate hints based on several notes."
             )
 
         self.cloze_field_index = (
-            get_field_index(original_model, cloze_field)
-            if original_model["type"] == CLOZE_TYPE
+            get_field_index(self.original_model, self.cloze_field)
+            if self.original_model["type"] == CLOZE_TYPE
             else None
         )
 
@@ -125,10 +138,10 @@ class HintGenerator:
                 self.sorting_key = self.default_text_sorting_key
 
         try:
-            note_hints_sorted = self.clean_hint(
-                note_hints, break_lines=break_lines
+            self.clean_hint(
+                note_hints
             )
-            hint = self.get_string_hint_from_list()
+            hint = self.get_string_hint_from_list() # TODO: don't override in the HintAdaptor
         except Exception as e:
             logger.error(e)
             logger.error("There might have been an error with the sorting key.")
@@ -136,7 +149,7 @@ class HintGenerator:
 
         logger.info("The hint that will be repercuted to all notes is:")
         logger.info(hint)
-        return notesID, original_model, note_hints_sorted,hint, 
+        return hint
     
 
     def get_raw_global_hint(self
@@ -191,9 +204,7 @@ class HintGenerator:
 
     def clean_hint(
         self,
-        notesID: list[int],
         note_hints: list[tuple[str, str]],
-        break_lines: bool = False,
     ) -> list[str]:
         """Clean the global hint by sorting and eventually adding break lines.
 
@@ -201,41 +212,40 @@ class HintGenerator:
             note_hints (list[tuple[str, str]]): The generated global hint to clean
             sorting_key (Optional[Callable]): The method to use to sort the hint
             (alphabetically, numerically). Ex: lambda row: int(row[1])
-            break_lines (bool, optional): If you want breaklines. For now it only works
-            if the sorting field is numerical (years) and it add breaklines between decades.
-            Defaults to False.
-
         Returns:
             list[str]: The cleaned hints
         """
         note_hints_sorted = note_hints[:]
         # note_hints_sorted.sort(key=sorting_key)
-        temp = sorted(zip(note_hints_sorted, notesID), key=lambda zipped_list: self.sorting_key(zipped_list[0]))
-        note_hints_sorted, notesID = zip(*temp)
+        temp = sorted(zip(note_hints_sorted, self.notesID), key=lambda zipped_list: self.sorting_key(zipped_list[0]))
+        note_hints_sorted, self.notesID = zip(*temp)
         
         # Issue with sorting pinyin for now:
         # ex yunmi < yunan whereas it should be the opposite (yu<yun)
         note_hints_sorted = [el[0] for el in note_hints_sorted]
 
         # TODO: Specifics to have lines breaks between decades when the sorting field is Year
-        if break_lines:
+        if self.break_lines:
             note_hints_sorted = breaklines_by_number(note_hints_sorted)
+        self.note_hints_sorted = note_hints_sorted
         return note_hints_sorted
     
     
 class HintAdaptor(HintGenerator):
     def __init__(self, 
+                 *args,
                  additional_hint_field: Optional[str] = None,
-                 additional_hint_func: Optional[Callable] = None,):
-        super().__init__(self)
+                 additional_hint_func: Optional[Callable] = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
         self.additional_hint_field = additional_hint_field
         self.additional_hint_func = additional_hint_func
         
-    def append_if_not_first_group(self, query, replace, note):
+    def append_if_not_first_group(self, query, note):
         if not self.group_separator:
-            return replace
+            return self.replace
 
-        query_field = query.split(":")[0].replace('"','')
+        # query_field = query.split(":")[0].replace('"','')
         p = re.compile(r"(\d+)")
         m = p.search(query)
         if m:
@@ -244,13 +254,13 @@ class HintAdaptor(HintGenerator):
         # If user wants to replace the hints from scratch, then we must check if current note was already 
         # edited with the script
         # If they systematically want to append, not replace, then we skip the if below 
-        if self.group_separator in note[query_field] and replace:
-            note_groups = [int(el) for el in note[query_field].split(self.group_separator)]
+        if self.group_separator in note[self.query_field] and override_replace:
+            note_groups = [int(el) for el in note[self.query_field].split(self.group_separator)]
             if current_group_ID == min(note_groups):
-                replace = True
+                override_replace = True
             elif current_group_ID in note_groups:
-                replace = False
-        return replace
+                override_replace = False
+        return override_replace
 
     def get_string_hint_from_list(self, idx, hidding_char)->str:
         hint = (
@@ -266,14 +276,9 @@ class HintAdaptor(HintGenerator):
     def adapt_hint_to_note (
         self,
         query: str, 
-        original_model: ModelManager,
         nid: int,
         cur_note_hint: str,
-        cloze_field: str,
         additional_hint_func: Optional[Callable],
-        query_field: Optional[str], #TODO: remove query or (query_field, group_separator) ?
-        replace: bool = False,
-        # func=None,
     ) -> NotetypeDict:
         """Adapt the hint to a note by hiding the hint info of that note and update the note.
 
@@ -306,8 +311,9 @@ class HintAdaptor(HintGenerator):
                 def additional_hint_func(text):
                     return text[0]
             
-            if original_model["type"] == CLOZE_TYPE:
-                self.cloze_field_index = get_field_index(original_model, cloze_field)
+            if self.original_model["type"] == CLOZE_TYPE:
+                # TODO: check if cloze_field_index is already computed
+                self.cloze_field_index = get_field_index(self.original_model, self.cloze_field)
                 field_raw_text = extract_cloze_deletion(self.cloze_field_index, note, self.additional_hint_field)
             else:
                 try:
@@ -322,18 +328,18 @@ class HintAdaptor(HintGenerator):
             hidding_char = additional_hint_func(field_text)
 
 
-        hint = self.get_string_hint_from_list(self.note_hints_sorted, idx, hidding_char)
+        hint = self.get_string_hint_from_list(idx, hidding_char)
 
         logger.info(
             "Hint adapted for the current note"
-            f" {print_note_content(cloze_field, original_model, note)}:"
+            f" {print_note_content(self.cloze_field, self.original_model, note)}:"
         )
         for el in hint.split("<br>"):
             print(el)
 
-        replace = self.append_if_not_first_group(query, self.group_separator, replace, note)
+        override_replace = self.append_if_not_first_group(query, self.group_separator, self.replace, note)
 
-        if replace:
+        if override_replace:
             note[self.hint_holding_field] = hint
         else:
             hint = "<br><br>" + hint
@@ -344,9 +350,6 @@ class HintAdaptor(HintGenerator):
         self,
         note_type_name: str,
         query: str,
-        query_field: Optional[str]=None,
-        break_lines: bool = False,
-        replace: bool = False,
     ) -> None:
         """Main method to generate hints for several notes using their information.
 
@@ -363,27 +366,18 @@ class HintAdaptor(HintGenerator):
             cloze_field (Optional[str]): The name of the cloze field if notes are Cloze.
             separator (str, optional): The string to separate the info from flds_in_hint.
             Defaults to ", ".
-            break_lines (bool, optional): If you want breaklines. For now it only works
-            if the sorting field is numerical (years) and it add breaklines between decades.
-            Defaults to False.
-            replace (bool, optional): If you want to replace, not append the hing field.
-            Defaults to False.
-
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
-        notesID, original_model, note_hints_sorted, hint = self.generate_clean_hint(note_type_name, query, sorting_key, cloze_field, col, break_lines)
+        hint = self.generate_clean_hint(note_type_name, query)
 
         notes = []
-        for i,nid in enumerate(notesID):
+        for i,nid in enumerate(self.notesID):
             note = self.adapt_hint_to_note(
                 query,
-                note_hints_sorted,
-                original_model,
                 nid,
-                note_hints_sorted[i],
-                replace = replace,
-                query_field = query_field,
+                self.note_hints_sorted[i],
+                self.note_hints_sorted,
             )
             notes.append(note)
 

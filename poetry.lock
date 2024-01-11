@@ -451,6 +451,16 @@ files = [
 ]
 
 [[package]]
+name = "pysqlite3"
+version = "0.5.2"
+description = "DB-API 2.0 interface for Sqlite 3.x"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pysqlite3-0.5.2.tar.gz", hash = "sha256:0abc1756e8b39bd51c303e8fac37497ccaccc7b237c89fe3cf47ee8e614c590b"},
+]
+
+[[package]]
 name = "pyyaml"
 version = "6.0.1"
 description = "YAML parser and emitter for Python"
@@ -730,4 +740,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "5564a0e03227e8a6a4a739880cc5b3c196e378d9e21db9bf12d056c184f72edb"
+content-hash = "398a0595f6e8306b9a13fdd49798e348f08f7e205b83efaf062dce2f75900456"

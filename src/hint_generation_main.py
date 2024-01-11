@@ -14,7 +14,7 @@ from src.utils.constants import CLOZE_TYPE
 
 if __name__ == "__main__":
     COL_PATH = get_col_path("src/config.yaml")
-    if col is None:
+    if 'col' not in globals():
         col = Collection(COL_PATH)
     
     for note_type_name in ["Best Pictures"]: #"Chinois","Allemand"]:
@@ -22,6 +22,7 @@ if __name__ == "__main__":
 
         cloze_field = ""  # "Text"
         group_separator = ", "
+        query_field = "Year"
 
         match note_type_name:
             case "Chinois":
@@ -47,32 +48,30 @@ if __name__ == "__main__":
                 sorting_field = "Year"
                 additional_hint_field = "Movie winner"
                 hint_field = "Extra"
-
+                
+        # TODO: check if HintGenerator is ok
+        hint_adaptor = HintAdaptor(
+            flds_in_hint,
+            col = col,
+            hint_holding_field = hint_field,
+            sorting_field = sorting_field,
+            sorting_key = sorting_key,
+            separator = separator,
+            group_separator = group_separator,
+            additional_hint_field = additional_hint_field,
+            additional_hint_func = additional_hint_func,
+            replace = True,
+            query_field = query_field,
+            break_lines = break_lines,
+        )
 
         for cent in ["19","20"]:
             for i in range(10):
-                query_field = "Year"
                 query = f'{query_field}:{cent}{i}*'
                 try:
-                    hint_adaptor = HintAdaptor()
-                    # TODO: check if HintGenerator is ok
-                    generate_hint_main(
-                        COL_PATH,
-                        note_type_name,
-                        query,
-                        flds_in_hint,
-                        hint_field,
-                        additional_hint_field,
-                        additional_hint_func,
-                        sorting_key,
-                        sorting_field,
-                        separator=separator,
-                        break_lines=break_lines,
-                        # cloze_field=cloze_field,
-                        replace = True,
-                        query_field = query_field,
-                        # group_separator = group_separator
-                    )
+
+                    hint_adaptor.run(note_type_name,
+                                     query,)
                 except ValueError as e:
                     print(query, e)
                     continue

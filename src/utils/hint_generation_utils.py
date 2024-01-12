@@ -308,8 +308,6 @@ class HintAdaptor(HintGenerator):
                 self.additional_hint_func = lambda text: text[0]
             
             if self.original_model["type"] == CLOZE_TYPE:
-                # TODO: check if cloze_field_index is already computed
-                self.cloze_field_index = get_field_index(self.original_model, self.cloze_field)
                 field_raw_text = extract_cloze_deletion(self.cloze_field_index, note, self.additional_hint_field)
             else:
                 try:

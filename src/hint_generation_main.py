@@ -1,13 +1,9 @@
 # from datetime import datetime
-from typing import Callable, Optional
-import yaml
 from anki.collection import Collection
-from loguru import logger
 from src.utils.german_utils import romanic_additional_hint_func, romanic_sorting_key
 
 from src.utils.hint_generation_utils import HintAdaptor
-from src.utils.note_utils import find_notes, get_col_path
-from src.utils.constants import CLOZE_TYPE
+from src.utils.note_utils import get_col_path
 
 # TODO: make as arg
 

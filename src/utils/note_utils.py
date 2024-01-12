@@ -3,6 +3,7 @@ from typing import Optional
 import yaml
 
 from anki.collection import Collection
+from anki.errors import InvalidInput
 from anki.models import NotetypeDict
 from loguru import logger
 
@@ -224,7 +225,11 @@ def find_notes(
 
     # Get the notes to edit
     new_query = query + f' note:"{note_type_name}"'
-    notesID = col.find_notes(new_query)
+    try:
+        notesID = col.find_notes(new_query)
+    except InvalidInput as e:
+        col.reopen()
+        notesID = col.find_notes(new_query)
 
     if len(notesID) == 0:
         raise ValueError("No notes found. Please review your query and cloze note type")

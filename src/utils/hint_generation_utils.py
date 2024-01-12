@@ -141,7 +141,7 @@ class HintGenerator:
             self.clean_hint(
                 note_hints
             )
-            hint = self.get_string_hint_from_list() # TODO: don't override in the HintAdaptor
+            hint = self.get_full_string_hint_from_list() # TODO: don't override in the HintAdaptor
         except Exception as e:
             logger.error(e)
             logger.error("There might have been an error with the sorting key.")
@@ -198,7 +198,7 @@ class HintGenerator:
 
         return note_hints
 
-    def get_string_hint_from_list(self)->str:
+    def get_full_string_hint_from_list(self)->str:
         hint = "<br>".join(self.note_hints_sorted)
         return hint
 
@@ -251,18 +251,16 @@ class HintAdaptor(HintGenerator):
         if m:
             current_group_ID = int(m.group(1))
         
-        # If user wants to replace the hints from scratch, then we must check if current note was already 
+        # The only case where we override the user input of replace is the following:
+        # If user wants to replace the hints from scratch, and the current note was already 
         # edited with the script
-        # If they systematically want to append, not replace, then we skip the if below 
-        if self.group_separator in note[self.query_field] and override_replace:
+        if self.group_separator in note[self.query_field] and self.replace:
             note_groups = [int(el) for el in note[self.query_field].split(self.group_separator)]
-            if current_group_ID == min(note_groups):
-                override_replace = True
-            elif current_group_ID in note_groups:
-                override_replace = False
-        return override_replace
+            if current_group_ID in note_groups:
+                return False
+        return self.replace
 
-    def get_string_hint_from_list(self, idx, hidding_char)->str:
+    def get_adapted_string_hint_from_list(self, idx, hidding_char)->str:
         hint = (
             "<br>".join(self.note_hints_sorted[:idx])
             + ("<br>" if idx != 0 else "")
@@ -278,7 +276,6 @@ class HintAdaptor(HintGenerator):
         query: str, 
         nid: int,
         cur_note_hint: str,
-        additional_hint_func: Optional[Callable],
     ) -> NotetypeDict:
         """Adapt the hint to a note by hiding the hint info of that note and update the note.
 
@@ -307,9 +304,8 @@ class HintAdaptor(HintGenerator):
         if self.additional_hint_field is None:
             hidding_char = "?"
         else:
-            if additional_hint_func is None:
-                def additional_hint_func(text):
-                    return text[0]
+            if self.additional_hint_func is None:
+                self.additional_hint_func = lambda text: text[0]
             
             if self.original_model["type"] == CLOZE_TYPE:
                 # TODO: check if cloze_field_index is already computed
@@ -325,10 +321,10 @@ class HintAdaptor(HintGenerator):
                     raise e
                     
             field_text = BeautifulSoup(field_raw_text, "html.parser").text
-            hidding_char = additional_hint_func(field_text)
+            hidding_char = self.additional_hint_func(field_text)
 
 
-        hint = self.get_string_hint_from_list(idx, hidding_char)
+        hint = self.get_adapted_string_hint_from_list(idx, hidding_char)
 
         logger.info(
             "Hint adapted for the current note"
@@ -337,7 +333,7 @@ class HintAdaptor(HintGenerator):
         for el in hint.split("<br>"):
             print(el)
 
-        override_replace = self.append_if_not_first_group(query, self.group_separator, self.replace, note)
+        override_replace = self.append_if_not_first_group(query, note)
 
         if override_replace:
             note[self.hint_holding_field] = hint
@@ -377,7 +373,6 @@ class HintAdaptor(HintGenerator):
                 query,
                 nid,
                 self.note_hints_sorted[i],
-                self.note_hints_sorted,
             )
             notes.append(note)
 

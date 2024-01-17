@@ -141,7 +141,7 @@ class HintGenerator:
             self.clean_hint(
                 note_hints
             )
-            hint = self.get_full_string_hint_from_list() # TODO: don't override in the HintAdaptor
+            hint = self.get_full_string_hint_from_list()
         except Exception as e:
             logger.error(e)
             logger.error("There might have been an error with the sorting key.")

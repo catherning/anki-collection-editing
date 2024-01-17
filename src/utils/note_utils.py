@@ -16,19 +16,45 @@ class NoteConverter:
     def __init__(self, 
                  config_path: str,
                  new_note_name: str,
-                 new_fields: list[tuple[str, str]],
+                 new_fields: Optional[list[tuple[str, str]]] = None,
                  original_type_name: Optional[str] = "Cloze",
                  cloze_text_field: Optional[str] = "Text",
 
                  ):
         self.config_path = config_path
-        self.COL_PATH = self.get_col_path()
+        self.COL_PATH = get_col_path(self.config_path)
         self.col = Collection(self.COL_PATH)
         self.original_type_name = original_type_name
         self.new_type_name = new_note_name
         self.new_fields = new_fields
+        if self.new_fields is None:
+            self.interactive_field_mapping()
         self.original_field_list = []
         self.cloze_text_field = cloze_text_field
+        
+    def interactive_field_mapping(self):
+        """Interactive method to map the fields of the new note type from the cloze fields
+        of the original note type
+        """
+        
+        logger.info(
+            "No fields given for the new note type. Please write the name "
+            "of the new fields and from which cloze they are extracted"
+        )
+        new_fields = []
+        field = ""
+        while field != "stop":
+            logger.info(
+                "Please write the field information as follow: '[Name of field],[c1]'"
+            )
+            field = input()
+            field_info = [el.strip() for el in field.split(",")]
+            if field == "stop" or len(field_info) != 2:
+                break
+            new_fields.append(tuple(field_info))
+            logger.info(f"New field information {field_info} added")
+            
+        self.new_fields = new_fields
         
     def run_cloze2Basic(
         self,
@@ -61,38 +87,22 @@ class NoteConverter:
         # TODO: save original model & new created model
         self.original_field_list = [fld["name"] for fld in original_model["flds"]]
 
-        if new_fields is None:
-            logger.info(
-                "No fields given for the new note type. Please write the name "
-                "of the new fields and from which cloze they are extracted"
-            )
-            new_fields = []
-            field = ""
-            while field != "stop":
-                logger.info(
-                    "Please write the field information as follow: '[Name of field],[c1]'"
-                )
-                field = input()
-                field_info = [el.strip() for el in field.split(",")]
-                if field == "stop" or len(field_info) != 2:
-                    break
-                new_fields.append(tuple(field_info))
-                logger.info(f"New field information {field_info} added")
 
         # If model is of type Cloze, we do the conversion,
         # otherwise we just do the regex extraction
         if original_model["type"] == CLOZE_TYPE:
             # If the user doesn't map the Text field to a target field, we do it
-            if not [el for el in new_fields if self.cloze_text_field in el[1]]:
-                new_fields.append((FIELD_WITH_ORIGINAL_CLOZE,self. cloze_text_field))
+            if not [el for el in self.new_fields if self.cloze_text_field in el[1]]:
+                self.new_fields.append((FIELD_WITH_ORIGINAL_CLOZE,self. cloze_text_field))
 
             # Resume a conversion if the new type was already created before
+            # TODO: make it the user action to create the new type ?
             new_note_type = col.models.by_name(self.new_type_name)
             if new_note_type is None:
                 new_note_type = self.create_note_type(
                 )
 
-            missing_fields = set(field[0] for field in new_fields) - set(
+            missing_fields = set(field[0] for field in self.new_fields) - set(
                 field["name"] for field in new_note_type["flds"]
             )
             for field in missing_fields:
@@ -120,18 +130,6 @@ class NoteConverter:
                 " converted."
             )
         col.close()
-
-        
-        
-    def get_col_path(self):
-        with open(self.config_path, 'r') as file:
-            config = yaml.safe_load(file)
-        COL_PATH = config["collection_path"]
-
-        if COL_PATH[-6:] != ".anki2":
-            COL_PATH += "collection.anki2"
-        return COL_PATH
-
 
     def create_note_type(
         self,
@@ -246,6 +244,7 @@ class NoteConverter:
 
         proceed()
         self.col.models.change(old_note_type, notesID, new_note_type, fmap, cmap=None)
+        # TODO: Is it possible not to do this?
         logger.warning(
             "The notes were converted even if the extraction is not validated. "
             "If you don't confirm and save the notes, you can resume the conversion "
@@ -359,3 +358,11 @@ def find_notes(
             proceed()
     return list(notesID), original_model
 
+def get_col_path(config_path):
+    with open(config_path, 'rb') as file:
+        config = yaml.safe_load(file)
+    COL_PATH = config["collection_path"]
+
+    if COL_PATH[-6:] != ".anki2":
+        COL_PATH += "collection.anki2"
+    return COL_PATH

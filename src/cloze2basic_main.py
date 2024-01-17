@@ -1,14 +1,5 @@
-from typing import Optional
-
-import yaml
-from anki.collection import Collection
 from loguru import logger
-
-from src.utils.field_utils import add_field
-from src.utils.note_utils import NoteConverter, get_col_path
-from src.utils.constants import CLOZE_TYPE, FIELD_WITH_ORIGINAL_CLOZE
-
-
+from src.utils.note_utils import NoteConverter
 
 
 if __name__ == "__main__":

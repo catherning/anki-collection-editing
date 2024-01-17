@@ -23,3 +23,5 @@ def romanic_sorting_key(hint_info):
 def romanic_additional_hint_func(text):
     """Get the first letter of the main info (ex: for das Mädchen -> M, not d)"""
     return next(get_main_words(text))[0]
+
+# TODO: make a class for the sorting key and additional hint func ?

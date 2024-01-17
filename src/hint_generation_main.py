@@ -9,11 +9,11 @@ from src.utils.note_utils import get_col_path
 
 
 if __name__ == "__main__":
-    COL_PATH = get_col_path("src/config.yaml")
+    COL_PATH = get_col_path("config.yaml")
     if 'col' not in globals():
         col = Collection(COL_PATH)
     
-    for note_type_name in ["Best Pictures"]: #"Chinois","Allemand"]:
+    for note_type_name in ["Music"]: #"Chinois","Allemand"]:
         break_lines = False
 
         cloze_field = ""  # "Text"
@@ -44,6 +44,15 @@ if __name__ == "__main__":
                 sorting_field = "Year"
                 additional_hint_field = "Movie winner"
                 hint_field = "Extra"
+            
+            case "Music":
+                sorting_key = None
+                flds_in_hint = ["Year","Album"]
+                separator = " "
+                sorting_field = "Year"
+                additional_hint_func = None
+                additional_hint_field = None #"Album"
+                hint_field = "Extra"
                 
         # TODO: check if HintGenerator is ok
         hint_adaptor = HintAdaptor(
@@ -60,17 +69,26 @@ if __name__ == "__main__":
             query_field = query_field,
             break_lines = break_lines,
         )
+        
+        query = f'Krzysztof'
+        try:
 
-        for cent in ["19","20"]:
-            for i in range(10):
-                query = f'{query_field}:{cent}{i}*'
-                try:
+            hint_adaptor.run(note_type_name,
+                                query,)
+        except ValueError as e:
+            print(query, e)
+            continue
 
-                    hint_adaptor.run(note_type_name,
-                                     query,)
-                except ValueError as e:
-                    print(query, e)
-                    continue
+        # for cent in ["19","20"]:
+        #     for i in range(10):
+        #         query = f'{query_field}:{cent}{i}*'
+        #         try:
+
+        #             hint_adaptor.run(note_type_name,
+        #                              query,)
+        #         except ValueError as e:
+        #             print(query, e)
+        #             continue
 
                 
 

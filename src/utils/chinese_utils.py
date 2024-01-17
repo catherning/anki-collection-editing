@@ -5,7 +5,7 @@ from anki_utils import COL_PATH
 
 from src.utils.note_utils import find_notes, get_col_path
 
-COL_PATH = get_col_path("src/config.yaml")
+COL_PATH = get_col_path("config.yaml")
 
 ## Get pinyin of characters to fill into a note field
 def fill_pinyin(COL_PATH, note_type_name, field_to_fill, source_field, query):

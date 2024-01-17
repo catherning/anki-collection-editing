@@ -38,7 +38,7 @@ def get_notes_to_edit(col,original_type_name):
                 override_confirmation = True
             )
 
-COL_PATH = get_col_path("src/config.yaml")
+COL_PATH = get_col_path("config.yaml")
 col = Collection(COL_PATH)
 hint_field = "Synonyms"
 main_signification_field = "Simplified"

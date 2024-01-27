@@ -20,29 +20,27 @@ def proceed():
 
 
 
-# for a specific note, provide methods for a specific field. there can be different objects for different fields
+# for a specific note, provide methods for a specific field. there can be different objects for different fields ?
 class NoteFieldUtils:
-    def __init__(self, col: Collection, note_type_name: str):
+    def __init__(self, col: Collection, note_type_name: str,field_name):
         self.col = col
         self.note_type_name = note_type_name
         self.note_type = col.models.by_name(self.new_type_name)
+        self.field_name = field_name
 
-    def add_field(self, field: str) -> None:
+    def add_field(self) -> None:
         """
-        Adds a new field to a note type.
-
-        Parameters:
-        field (str): The name of the new field.
+        Adds the new field to the note type.
 
         Returns:
         None
         """
-        fieldDict = self.col.models.new_field(field)
+        fieldDict = self.col.models.new_field(self.field_name)
         self.col.models.add_field(self.note_type, fieldDict)
 
-    def get_field_index(self, field_name: str) -> int:
+    def get_field_index(self) -> int:
         return list(
-            filter(lambda field: field["name"] == field_name, self.note_type["flds"])
+            filter(lambda field: field["name"] == self.field_name, self.note_type["flds"])
         )[0]["ord"]
 
     def extract_cloze_deletion(self,field_to_extract_index, note, cloze_deletion) -> str:
@@ -58,12 +56,27 @@ class NoteFieldUtils:
             logger.error(f"Cloze text: '{note.fields[field_to_extract_index]}'")
             raise Exception(f"Regex {regex} incorrect.")
 
-def truncate_field(field: str, max_length: int = 30) -> str:
-    return (
-        f'{BeautifulSoup(field[:max_length], "html.parser").text}...'
-        if len(BeautifulSoup(field, "html.parser").text) > max_length + 3
-        else BeautifulSoup(field, "html.parser").text
-    )
+    def truncate_field(self, field: str, max_length: int = 30) -> str:
+        return (
+            f'{BeautifulSoup(field[:max_length], "html.parser").text}...'
+            if len(BeautifulSoup(field, "html.parser").text) > max_length + 3
+            else BeautifulSoup(field, "html.parser").text
+        )
+
+    def extract_text_from_field(self,note, field):
+        soup = BeautifulSoup(note[field], "html.parser")
+        for item in soup.select('span'):
+            item.extract()
+        return soup.get_text(" ")
+
+    def get_cleaned_field_data(self, separator, note, flds_in_hint):
+        content = ""
+        for field in flds_in_hint:
+            text = extract_text_from_field(note, field)
+            clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
+            content += clean_text + separator
+        return content
+
 
 
 def print_note_content(
@@ -97,20 +110,6 @@ def get_cloze_data(flds_in_hint, cloze_field_index, separator, sorting_field, c_
                     )
             c_err += 1
                 # TODO: warnings / error if cloze type but fields given or the opposite
-    return content
-
-def extract_text_from_field(note, field):
-    soup = BeautifulSoup(note[field], "html.parser")
-    for item in soup.select('span'):
-        item.extract()
-    return soup.get_text(" ")
-
-def get_cleaned_field_data(separator, note, flds_in_hint):
-    content = ""
-    for field in flds_in_hint:
-        text = extract_text_from_field(note, field)
-        clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
-        content += clean_text + separator
     return content
 
 

@@ -7,9 +7,7 @@ from anki.errors import InvalidInput
 from anki.models import NotetypeDict
 from loguru import logger
 
-from src.utils.field_utils import (add_field, extract_cloze_deletion,
-                   get_field_index, proceed,
-                   truncate_field, print_note_content)
+from src.utils.field_utils import (NoteFieldsUtils, proceed, truncate_field)
 from src.utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
 class NoteConverter:
@@ -31,6 +29,7 @@ class NoteConverter:
             self.interactive_field_mapping()
         self.original_field_list = []
         self.cloze_text_field = cloze_text_field
+        self.note_field_utils = NoteFieldsUtils(new_note_name,new_fields+[cloze_text_field])
         
     def interactive_field_mapping(self):
         """Interactive method to map the fields of the new note type from the cloze fields
@@ -109,7 +108,7 @@ class NoteConverter:
                 logger.warning(
                     f"Creation of the field '{field}' which is not present in new note type"
                 )
-                add_field(col, new_note_type, field)
+                self.note_field_utils[field].add_field()
             col.models.save(new_note_type)
 
             self.change_note_type(original_model, new_note_type, notesID)
@@ -150,7 +149,7 @@ class NoteConverter:
         new_note_type = models.new(self.note_name)
 
         for i, field_info in enumerate(self.new_fields):
-            add_field(self.col, new_note_type, field_info[0])
+            self.note_field_utils[field_info[0]].add_field()
 
             if field_info[1] not in self.original_field_list:
                 # Add template
@@ -273,17 +272,16 @@ class NoteConverter:
         if FIELD_WITH_ORIGINAL_CLOZE == self.new_fields[-1][0]:
             field_to_extract_index = -1
         else:
-            field_to_extract_index = get_field_index(new_note_type, self.cloze_text_field)
+            field_to_extract_index = self.note_field_utils[self.cloze_text_field].get_field_index()
 
         notes = []
         for noteID in notesID:
             note = self.col.get_note(noteID)
             for i, (target_field, field_origin) in enumerate(
-                self.new_fields
             ):  # Could use last value to see if it's a regex / cloze extraction
                 if field_origin not in self.original_field_list:
                     try:
-                        note.fields[i] = extract_cloze_deletion(
+                        note.fields[i] = self.note_field_utils[self.cloze_text_field].extract_cloze_deletion(
                             field_to_extract_index, note, field_origin
                         )
                     except Exception:
@@ -328,6 +326,7 @@ def find_notes(
 
     # Get the notes to edit
     new_query = query + f' note:"{note_type_name}"'
+    notefields = NoteFieldsUtils(col, note_type_name, [cloze_text_field])
     try:
         notesID = col.find_notes(new_query)
     except InvalidInput as e:
@@ -351,7 +350,7 @@ def find_notes(
                     )
                 # TODO: find cloze_text_field by getting the field with c1 ?
                 logger.info(
-                    print_note_content(cloze_text_field, original_model, note_details)
+                    notefields.print_note_content(cloze_text_field, original_model, note_details)
                 )
 
         if not override_confirmation:

@@ -357,10 +357,13 @@ def find_notes(
             proceed()
     return list(notesID), original_model
 
-def get_col_path(config_path):
+def get_yaml_value(config_path,key):
     with open(config_path, 'rb') as file:
         config = yaml.safe_load(file)
-    COL_PATH = config["collection_path"]
+    return config[key]
+
+def get_col_path(config_path):
+    COL_PATH = get_yaml_value(config_path, "collection_path")
 
     if COL_PATH[-6:] != ".anki2":
         COL_PATH += "collection.anki2"

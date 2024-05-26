@@ -4,8 +4,9 @@ from anki.collection import Collection
 from loguru import logger
 from langdetect import detect
 import re
+import fasttext.util
 
-from src.utils.note_utils import find_notes, get_col_path
+from src.utils.note_utils import find_notes, get_col_path, get_yaml_value
 from src.utils.field_utils import NoteFieldsUtils
 # TODO: make as arg
 
@@ -25,6 +26,7 @@ def get_last_id(col,original_type_name,query_field,group_separator):
             )
         except ValueError:
             return i-1
+
 
 def get_notes_to_edit(col,original_type_name):
     query = f'-is:suspended tag:marked'
@@ -47,8 +49,19 @@ def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", "):
 
 if __name__ == "__main__":
 
-    COL_PATH = get_col_path("src/config.yaml")
+    yaml_file = "src/config.yaml"
+
+    # TODO: change get_yaml_value to retrieve all values at once in a method
+    # ch_embedding_path = get_yaml_value(yaml_file,"ch_embedding_path")
+    # wv_from_text = KeyedVectors.load_word2vec_format(ch_embedding_path, binary=False, unicode_errors='replace')
+    lang = "zh" 
+    fasttext.util.download_model(lang, if_exists='ignore')
+    ft = fasttext.load_model(f'cc.{lang}.300.bin')
+    logger.info("Model loaded")
+    
+    COL_PATH = get_col_path(yaml_file)
     col = Collection(COL_PATH)
+
     hint_field = "Synonyms"
     group_name = f"{hint_field} group"
     main_signification_field = "Simplified"
@@ -88,44 +101,46 @@ if __name__ == "__main__":
                     groups = [[noteID]]
                     for el in group_elements:
                         query = f"{main_signification_field}:{el}"
-                        try:
+                        if el =="\n":
+                            # It's part of another group too
+                            groups.append([noteID])
+                        else:
                             found_group_notes, _ = find_notes(
                                 col,
                                 query=query,
                                 note_type_name=original_type_name,
                                 override_confirmation = True
                             )
-                        except ValueError:
-                            # It's part of another group too
-                            groups.append([noteID])
-                        if len(found_group_notes) == 1:
-                            print("ok")
-                            # notes_of_the_group += found_group_notes
-                            groups[-1] += found_group_notes
-                        else:
-                            logger.warning("TODO: what to do if there's several notes with the same signification?")
+                            if len(found_group_notes) == 1:
+                                print("ok")
+                                # notes_of_the_group += found_group_notes
+                                groups[-1] += found_group_notes
+                            else:
+                                logger.warning("TODO: what to do if there's several notes with the same signification?")
                     for group in groups:
                         current_max_id += 1
                         assign_group_id(col,group,group_name,current_max_id, group_separator)
                         overall_edited_notes.update(group)
-        break
+
+        elif note[hint_field] and note[group_name]:
+            # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
+            breakpoint()
+            pass
+        elif not note[hint_field] :
+            # It's not in a group yet. I need to find the group using word embeddings
+            ft.get_nearest_neighbors(note[main_signification_field])
+            pass
+        else:
+            # What else ?
+            breakpoint()
+            pass
+
                         
         #         case "Allemand":
         #             lines = field_text.splitlines()
         #             group_elements = [line for line in lines if detect(line) == 'de']
         
         
-        # elif note[hint_field] and note[group_name]:
-        #     # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
-        #     breakpoint()
-        #     pass
-        # elif not note[hint_field] :
-        #     # It's not in a group yet. I need to find the group using word embeddings
-        #     pass
-        # else:
-        #     # What else ?
-        #     breakpoint()
-        #     pass
         
     print(len(notesID))
     col.close()

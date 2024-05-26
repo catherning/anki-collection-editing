@@ -25,7 +25,7 @@ urllib3 = "2.0.4"
 nltk = "^3.8.1"
 pyyaml = "^6.0.1"
 langdetect = "^1.0.9"
-pysqlite3 = "^0.5.2"
+fasttext = {git = "https://github.com/cfculhane/fastText"}
 
 [tool.poetry.group.languages]
 

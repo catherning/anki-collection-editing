@@ -128,7 +128,13 @@ if __name__ == "__main__":
             pass
         elif not note[hint_field] :
             # It's not in a group yet. I need to find the group using word embeddings
-            ft.get_nearest_neighbors(note[main_signification_field])
+            nn = ft.get_nearest_neighbors(note[main_signification_field])
+            for neighbour in nn:
+                # check if neighbour in cards
+                pass
+            
+            # for cards, filter on cards of same note type and not new and calculate similarity with the current word
+            # if >threshold, then similar ?
             pass
         else:
             # What else ?

@@ -1,6 +1,8 @@
 import re
 from typing import Optional
 import yaml
+import heapq
+import numpy as np
 
 from anki.collection import Collection
 from anki.errors import InvalidInput
@@ -8,7 +10,7 @@ from anki.models import NotetypeDict
 from loguru import logger
 
 from src.utils.field_utils import (NoteFieldsUtils, proceed, truncate_field)
-from src.utils.constants import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
+from src.utils.utils import FIELD_WITH_ORIGINAL_CLOZE, CLOZE_TYPE
 
 class NoteConverter:
     def __init__(self, 
@@ -368,3 +370,31 @@ def get_col_path(config_path):
     if COL_PATH[-6:] != ".anki2":
         COL_PATH += "collection.anki2"
     return COL_PATH
+
+
+def get_nn(word_vectors, query, k, word_list):
+    # Calculate the norm of the query vector
+    # Used fasttext C++ code converted
+    query_norm = np.linalg.norm(query)
+    if np.abs(query_norm) < 1e-8:
+        query_norm = 1
+
+    heap = []
+    
+    for i, word in enumerate(word_list):
+        # Calculate the dot product
+        dp = np.dot(word_vectors[i], query)
+        similarity = dp / query_norm
+        
+        if len(heap) == k and similarity < heap[0][0]:
+            continue
+        
+        # Push to the heap
+        heapq.heappush(heap, (similarity, word))
+        if len(heap) > k:
+            heapq.heappop(heap)
+
+    # Sort the heap by similarity in descending order
+    heap.sort(reverse=True, key=lambda x: x[0])
+    
+    return heap

@@ -6,7 +6,7 @@ from anki.notes import Note
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from src.utils.constants import CLOZE_TYPE
+from src.utils.utils import CLOZE_TYPE
 
 def proceed():
     print("Proceed ? (Y/n)")

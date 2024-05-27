@@ -10,7 +10,7 @@ from src.utils.field_utils import (extract_cloze_deletion,
                    get_field_index, print_note_content, proceed, get_cloze_data, get_cleaned_field_data,
                    breaklines_by_number)
 from src.utils.note_utils import find_notes
-from src.utils.constants import CLOZE_TYPE
+from src.utils.utils import CLOZE_TYPE
 
 class HintGenerator:
     def __init__(self, 

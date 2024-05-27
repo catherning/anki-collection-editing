@@ -1,2 +1,0 @@
-CLOZE_TYPE = 1
-FIELD_WITH_ORIGINAL_CLOZE = "Original cloze text"

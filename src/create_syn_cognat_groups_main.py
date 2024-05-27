@@ -8,6 +8,7 @@ import fasttext.util
 
 from src.utils.note_utils import find_notes, get_col_path, get_yaml_value
 from src.utils.field_utils import NoteFieldsUtils
+from src.utils.utils import timeit
 # TODO: make as arg
 
 def get_last_id(col,original_type_name,query_field,group_separator):
@@ -47,6 +48,13 @@ def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", "):
         notes.append(note)
     col.update_notes(notes)
 
+def update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group):
+    current_max_id += 1 # FIXME: bof
+    assign_group_id(col,group,group_name,current_max_id, group_separator)
+    overall_edited_notes.update(group)
+    # TODO: change flag of notes so that we can still check manually just in case
+    return current_max_id
+
 if __name__ == "__main__":
 
     yaml_file = "src/config.yaml"
@@ -57,6 +65,8 @@ if __name__ == "__main__":
     lang = "zh" 
     fasttext.util.download_model(lang, if_exists='ignore')
     ft = fasttext.load_model(f'cc.{lang}.300.bin')
+    ft.get_nearest_neighbors = timeit(ft.get_nearest_neighbors)
+
     logger.info("Model loaded")
     
     COL_PATH = get_col_path(yaml_file)
@@ -65,6 +75,7 @@ if __name__ == "__main__":
     hint_field = "Synonyms"
     group_name = f"{hint_field} group"
     main_signification_field = "Simplified"
+    translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
     current_max_id = get_last_id(col,
@@ -86,22 +97,21 @@ if __name__ == "__main__":
             breakpoint()
 
         
+        # It's a group that I created manually : 
+        # just need to find the other notes in the group and create the group ID
         if note[hint_field] and not note[group_name]:
-            # It's a group that I created manually : 
-            # just need to find the other notes in the group and create the group ID
             print(note[hint_field])
             hints = note[hint_field].split()
             field_text = note_field.extract_text_from_field(note,hint_field)
             match original_type_name:
                 # TODO: make it more flexible
                 case "Chinois":
-                    # TODO: important ! take into account the spaces in the hints that mean that they are different groups
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
                     group_elements = re.findall("[\u4e00-\u9FFF]+|\n", field_text)
                     groups = [[noteID]]
                     for el in group_elements:
                         query = f"{main_signification_field}:{el}"
-                        if el =="\n":
+                        if el =="\n": # save in constant var / make more flexible ?
                             # It's part of another group too
                             groups.append([noteID])
                         else:
@@ -118,24 +128,56 @@ if __name__ == "__main__":
                             else:
                                 logger.warning("TODO: what to do if there's several notes with the same signification?")
                     for group in groups:
-                        current_max_id += 1
-                        assign_group_id(col,group,group_name,current_max_id, group_separator)
-                        overall_edited_notes.update(group)
+                        current_max_id = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group)
 
+        # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
         elif note[hint_field] and note[group_name]:
-            # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
             breakpoint()
             pass
+        
+        # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] :
-            # It's not in a group yet. I need to find the group using word embeddings
             nn = ft.get_nearest_neighbors(note[main_signification_field])
+            groups = [noteID]
             for neighbour in nn:
                 # check if neighbour in cards
-                pass
+                query = f"{main_signification_field}:{neighbour[1]}"
+                try:
+                    found_group_notes, _ = find_notes(
+                                    col,
+                                    query=query,
+                                    note_type_name=original_type_name,
+                                    override_confirmation = True
+                                )
+                except ValueError:
+                    continue
+                # TODO: What if it's part of several groups and I don't know ? at first change manually afterwards? 
+                # use the english translation and if there's different meaning, vectorize, find similar words in english then translate ?
+                if len(found_group_notes)==1:
+                    groups.append(found_group_notes[0])                
+                else:
+                    pass
+                    # TODO: what?
+            current_max_id = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, group)
+
             
-            # for cards, filter on cards of same note type and not new and calculate similarity with the current word
-            # if >threshold, then similar ?
-            pass
+            # for cards, filter on cards of same note type and not new and calculate similarity with the current word ?
+            # more efficient to find words with same meaning... with basic nlp processing tokenization
+            meaning = re.split(';|,| |\n', note[translation_field])
+
+            for word in meaning:
+                query = f"{translation_field}:{word}"
+                try:
+                    found_group_notes, _ = find_notes(
+                                    col,
+                                    query=query,
+                                    note_type_name=original_type_name,
+                                    override_confirmation = True
+                                )
+                except ValueError:
+                    continue
+                # if >threshold, then similar ?
+                pass
         else:
             # What else ?
             breakpoint()

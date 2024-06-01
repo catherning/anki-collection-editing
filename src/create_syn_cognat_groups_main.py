@@ -1,11 +1,11 @@
-# from datetime import datetime
+import numpy as np
 from typing import Callable, Optional
 from anki.collection import Collection
 from loguru import logger
 from langdetect import detect
 import re
 import fasttext.util
-
+from sklearn.metrics.pairwise import cosine_similarity
 from src.utils.note_utils import find_notes, get_col_path, get_yaml_value
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
@@ -30,7 +30,7 @@ def get_last_id(col,original_type_name,query_field,group_separator):
 
 
 def get_notes_to_edit(col,original_type_name):
-    query = f'-is:suspended tag:marked'
+    query = f'-is:new -is:suspended tag:marked'
     return find_notes(
                 col,
                 query=query,
@@ -53,7 +53,74 @@ def update_notes_in_group(col, group_name, group_separator, current_max_id, over
     assign_group_id(col,group,group_name,current_max_id, group_separator)
     overall_edited_notes.update(group)
     # TODO: change flag of notes so that we can still check manually just in case
+    return current_max_id, overall_edited_notes
+
+def assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes):
+    group_elements = re.findall("[\u4e00-\u9FFF]+|\n", field_text)
+    groups = [[noteID]]
+    for el in group_elements:
+        query = f"{main_signification_field}:{el}"
+        if el =="\n": # save in constant var / make more flexible ?
+            # It's part of another group too
+            groups.append([noteID])
+        else:
+            found_group_notes, _ = find_notes(
+                col,
+                query=query,
+                note_type_name=original_type_name,
+                override_confirmation = True
+            )
+            if len(found_group_notes) == 1:
+                groups[-1] += found_group_notes
+            else:
+                logger.warning("TODO: what to do if there's several notes with the same signification?")
+    for group in groups:
+        current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group)
     return current_max_id
+
+
+def get_vector_of_notes(col,notesID,ft):
+    vectors = []
+    for noteID in notesID:
+        vectors.append(ft.get_word_vector(col.get_note(noteID)[main_signification_field]))
+    return np.array(vectors)
+
+
+def find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes):
+    # TODO: only for synonyms, not cognats
+    nn = ft.get_nearest_neighbors(note[main_signification_field])
+    group = [noteID]
+    for neighbour in nn:
+        # check if neighbour in cards
+        query = f"{main_signification_field}:{neighbour[1]}"
+        try:
+            found_group_notes, _ = find_notes(
+                            col,
+                            query=query,
+                            note_type_name=original_type_name,
+                            override_confirmation = True
+                        )
+        except ValueError:
+            continue
+        # TODO: What if it's part of several groups and I don't know ? at first change manually afterwards? 
+        # use the english translation and if there's different meaning, vectorize, find similar words in english then translate ?
+        if len(found_group_notes)==1:
+            group.append(found_group_notes[0])                
+        else:
+            pass
+            # TODO: what?
+    current_max_id,overall_edited_notes = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, group)
+
+    # Find closest vectors from the notes to edit
+    cos_sim = cosine_similarity(np.expand_dims(vectors[notesID.index(noteID),:],0),vectors)[0]
+    sorted_indices = np.argsort(-cos_sim)
+    filtered_indices = sorted_indices[cos_sim[sorted_indices] >= 0.5]
+    top_indices = filtered_indices[:5]
+    sim_group = [notesID[i] for i in top_indices]
+    current_max_id,overall_edited_notes = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, sim_group)
+    return current_max_id
+
+
 
 if __name__ == "__main__":
 
@@ -87,6 +154,9 @@ if __name__ == "__main__":
     note_field = NoteFieldsUtils(col,original_type_name, [hint_field])
 
     notesID, _ = get_notes_to_edit(col,original_type_name)
+    # notesID_rev = {noteID:i for i,noteID in enumerate(notesID)}
+    vectors = get_vector_of_notes(col,notesID,ft)
+
     for noteID in notesID:
         note = col.get_note(noteID)
         print(note[main_signification_field])
@@ -107,28 +177,8 @@ if __name__ == "__main__":
                 # TODO: make it more flexible
                 case "Chinois":
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
-                    group_elements = re.findall("[\u4e00-\u9FFF]+|\n", field_text)
-                    groups = [[noteID]]
-                    for el in group_elements:
-                        query = f"{main_signification_field}:{el}"
-                        if el =="\n": # save in constant var / make more flexible ?
-                            # It's part of another group too
-                            groups.append([noteID])
-                        else:
-                            found_group_notes, _ = find_notes(
-                                col,
-                                query=query,
-                                note_type_name=original_type_name,
-                                override_confirmation = True
-                            )
-                            if len(found_group_notes) == 1:
-                                print("ok")
-                                # notes_of_the_group += found_group_notes
-                                groups[-1] += found_group_notes
-                            else:
-                                logger.warning("TODO: what to do if there's several notes with the same signification?")
-                    for group in groups:
-                        current_max_id = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group)
+                    current_max_id = assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes)
+
 
         # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
         elif note[hint_field] and note[group_name]:
@@ -137,47 +187,8 @@ if __name__ == "__main__":
         
         # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] :
-            nn = ft.get_nearest_neighbors(note[main_signification_field])
-            groups = [noteID]
-            for neighbour in nn:
-                # check if neighbour in cards
-                query = f"{main_signification_field}:{neighbour[1]}"
-                try:
-                    found_group_notes, _ = find_notes(
-                                    col,
-                                    query=query,
-                                    note_type_name=original_type_name,
-                                    override_confirmation = True
-                                )
-                except ValueError:
-                    continue
-                # TODO: What if it's part of several groups and I don't know ? at first change manually afterwards? 
-                # use the english translation and if there's different meaning, vectorize, find similar words in english then translate ?
-                if len(found_group_notes)==1:
-                    groups.append(found_group_notes[0])                
-                else:
-                    pass
-                    # TODO: what?
-            current_max_id = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, group)
-
-            
-            # for cards, filter on cards of same note type and not new and calculate similarity with the current word ?
-            # more efficient to find words with same meaning... with basic nlp processing tokenization
-            meaning = re.split(';|,| |\n', note[translation_field])
-
-            for word in meaning:
-                query = f"{translation_field}:{word}"
-                try:
-                    found_group_notes, _ = find_notes(
-                                    col,
-                                    query=query,
-                                    note_type_name=original_type_name,
-                                    override_confirmation = True
-                                )
-                except ValueError:
-                    continue
-                # if >threshold, then similar ?
-                pass
+            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
+                
         else:
             # What else ?
             breakpoint()

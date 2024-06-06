@@ -2,7 +2,7 @@
 name = "anki-collection-editing"
 version = "0.1.0"
 description = ""
-authors = ["catherning <catherning.xu@gmail.com>"]
+authors = ["catherning"]
 readme = "README.md"
 
 [tool.poetry.dependencies]

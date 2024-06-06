@@ -85,7 +85,7 @@ So I converted the notes to Basic type and filled the fields `Winner` and `Year`
 ## How to use the scripts
 
 1. Create a backup of your collection. Run the scripts at your own risk. I am not responsible if you lose or corrupt any data.
-2. Create a Python environment and install the packages in [requirements.txt](requirements.txt)
+2. Create a Python environment and install the packages in [requirements.txt](requirements.txt) TODO: edit using poetry instead
 3. Create an `src/anki_utils.py` file holding the path variable `COL_PATH` to your collection. Cf [using a WSL environment](#using-a-wsl-environment)
 4. TODO: Edit the arguments according to what you need. Be careful to find the correct query to find the notes you want to edit.
    - You can first try the queries in the Anki GUI on your collection.

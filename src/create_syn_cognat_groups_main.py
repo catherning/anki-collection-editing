@@ -86,8 +86,9 @@ def get_vector_of_notes(col,notesID,ft):
     return np.array(vectors)
 
 
+
 def find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes):
-    # TODO: only for synonyms, not cognats
+    # 1.TODO: only for synonyms, not cognats
     nn = ft.get_nearest_neighbors(note[main_signification_field])
     group = [noteID]
     for neighbour in nn:
@@ -165,11 +166,11 @@ if __name__ == "__main__":
             # TODO
             logger.warning("The note was already found in a group! What to do ?")
             breakpoint()
-
+            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
         
         # It's a group that I created manually : 
         # just need to find the other notes in the group and create the group ID
-        if note[hint_field] and not note[group_name]:
+        elif note[hint_field] and not note[group_name]:
             print(note[hint_field])
             hints = note[hint_field].split()
             field_text = note_field.extract_text_from_field(note,hint_field)
@@ -179,16 +180,16 @@ if __name__ == "__main__":
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
                     current_max_id = assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes)
 
+        # It's not in a group yet. I need to find the group using word embeddings
+        elif not note[hint_field] :
+            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
+                
 
         # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
         elif note[hint_field] and note[group_name]:
             breakpoint()
             pass
         
-        # It's not in a group yet. I need to find the group using word embeddings
-        elif not note[hint_field] :
-            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
-                
         else:
             # What else ?
             breakpoint()

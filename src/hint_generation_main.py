@@ -27,6 +27,10 @@ if __name__ == "__main__":
                 sorting_field = additional_hint_field = "Pinyin.1"
                 sorting_key = None
                 additional_hint_func = None
+                # TODO: easiest : create a new field for the hint, don't override the existing field that the syn/cognats groups were eventually based on
+                hint_field=XXX 
+                # for hint_field in ["Synonyms","Cognats"]:
+                #     query_field = f"{hint_field} group"
 
             case "Allemand":
                 sorting_key = romanic_sorting_key
@@ -65,7 +69,7 @@ if __name__ == "__main__":
             group_separator = group_separator,
             additional_hint_field = additional_hint_field,
             additional_hint_func = additional_hint_func,
-            replace = True,
+            replace = False,
             query_field = query_field,
             break_lines = break_lines,
         )

@@ -4,11 +4,14 @@ from anki.collection import Collection
 from loguru import logger
 from langdetect import detect
 import re
-import fasttext.util
-from sklearn.metrics.pairwise import cosine_similarity
+import spacy
+from annoy import AnnoyIndex
+# from scipy.spatial.distance import cosine
+# from sklearn.metrics.pairwise import cosine_similarity
 from src.utils.note_utils import find_notes, get_col_path, get_yaml_value
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
+import subprocess
 # TODO: make as arg
 
 def get_last_id(col,original_type_name,query_field,group_separator):
@@ -22,6 +25,7 @@ def get_last_id(col,original_type_name,query_field,group_separator):
             notesID, _ = find_notes(
                 col,
                 query=query,
+                verbose=False,
                 note_type_name=original_type_name,
                 override_confirmation = True
             )
@@ -78,62 +82,62 @@ def assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_typ
         current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group)
     return current_max_id
 
+def get_word_vector(word):
+    return nlp(word).vector
 
-def get_vector_of_notes(col,notesID,ft):
+@timeit
+def get_vector_of_notes(col,notesID):
     vectors = []
     for noteID in notesID:
-        vectors.append(ft.get_word_vector(col.get_note(noteID)[main_signification_field]))
+        vectors.append(get_word_vector(col.get_note(noteID)[main_signification_field]))
     return np.array(vectors)
 
+@timeit
+def find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes,all_deck_notesID,distance_threshold=0.9):
+    vector_len = len(get_word_vector(col.get_note(noteID)[main_signification_field]))
 
-
-def find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes):
-    # 1.TODO: only for synonyms, not cognats
-    nn = ft.get_nearest_neighbors(note[main_signification_field])
-    group = [noteID]
-    for neighbour in nn:
-        # check if neighbour in cards
-        query = f"{main_signification_field}:{neighbour[1]}"
-        try:
-            found_group_notes, _ = find_notes(
-                            col,
-                            query=query,
-                            note_type_name=original_type_name,
-                            override_confirmation = True
-                        )
-        except ValueError:
-            continue
-        # TODO: What if it's part of several groups and I don't know ? at first change manually afterwards? 
-        # use the english translation and if there's different meaning, vectorize, find similar words in english then translate ?
-        if len(found_group_notes)==1:
-            group.append(found_group_notes[0])                
+    t = AnnoyIndex(vector_len, 'angular')
+    for i,v in enumerate(vectors):
+        t.add_item(i, v)
+    t.build(10) # 10 trees
+    t.save('chinese.ann')
+    
+    # TODO: or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
+    # but it would do all notesID at once
+    # most_similar = nlp.vocab.vectors.most_similar(vectors, n=10)
+    nn,distances = t.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
+    group = {noteID}
+    for nn_index,distance in zip(nn,distances):
+        if distance<=distance_threshold:
+            group.add(all_deck_notesID[nn_index])
         else:
-            pass
-            # TODO: what?
+            break # TODO: it's sorted, is there more pythonic way ?          
     current_max_id,overall_edited_notes = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, group)
 
-    # Find closest vectors from the notes to edit
-    cos_sim = cosine_similarity(np.expand_dims(vectors[notesID.index(noteID),:],0),vectors)[0]
-    sorted_indices = np.argsort(-cos_sim)
-    filtered_indices = sorted_indices[cos_sim[sorted_indices] >= 0.5]
-    top_indices = filtered_indices[:5]
-    sim_group = [notesID[i] for i in top_indices]
-    current_max_id,overall_edited_notes = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, sim_group)
     return current_max_id
 
 
+
+def download_spacy_model(model_name):
+    try:
+        # Run the command to download the spaCy model
+        result = subprocess.run(['python', '-m', 'spacy', 'download', model_name], check=True, capture_output=True, text=True)
+        print(f"Model {model_name} downloaded successfully.")
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while downloading the model: {e.stderr}")
 
 if __name__ == "__main__":
 
     yaml_file = "src/config.yaml"
 
     # TODO: change get_yaml_value to retrieve all values at once in a method
-    # ch_embedding_path = get_yaml_value(yaml_file,"ch_embedding_path")
-    # wv_from_text = KeyedVectors.load_word2vec_format(ch_embedding_path, binary=False, unicode_errors='replace')
     lang = "zh" 
-    fasttext.util.download_model(lang, if_exists='ignore')
-    ft = fasttext.load_model(f'cc.{lang}.300.bin')
-    ft.get_nearest_neighbors = timeit(ft.get_nearest_neighbors)
+    try:
+        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
+    except OSError:
+        download_spacy_model(f'{lang}_core_web_md')
+        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
 
     logger.info("Model loaded")
     
@@ -155,8 +159,15 @@ if __name__ == "__main__":
     note_field = NoteFieldsUtils(col,original_type_name, [hint_field])
 
     notesID, _ = get_notes_to_edit(col,original_type_name)
-    # notesID_rev = {noteID:i for i,noteID in enumerate(notesID)}
-    vectors = get_vector_of_notes(col,notesID,ft)
+
+    all_deck_notesID,_ = find_notes(
+                col,
+                query="-is:new", # TODO: change to get all notes ? or remove some of them afterwards because it would be increasing with time and thus slow the get_vector_of_notes (and get nn ?) ?
+                note_type_name=original_type_name,
+                override_confirmation = True,
+                verbose=False
+            )
+    all_vectors = get_vector_of_notes(col,all_deck_notesID)
 
     for noteID in notesID:
         note = col.get_note(noteID)
@@ -190,17 +201,17 @@ if __name__ == "__main__":
             breakpoint()
             pass
         
+        # It's not in a group yet. I need to find the group using word embeddings
+        elif not note[hint_field] :
+            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,all_vectors,overall_edited_notes,all_deck_notesID)
+                
         else:
             # What else ?
             breakpoint()
             pass
-
-                        
+             
         #         case "Allemand":
         #             lines = field_text.splitlines()
         #             group_elements = [line for line in lines if detect(line) == 'de']
         
-        
-        
-    print(len(notesID))
     col.close()

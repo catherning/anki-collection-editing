@@ -93,11 +93,11 @@ def get_vector_of_notes(col,notesID):
     return np.array(vectors)
 
 @timeit
-def find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes,all_deck_notesID,distance_threshold=0.9):
+def find_new_groups(col,main_signification_field,noteID,current_max_id,all_vectors,overall_edited_notes,all_deck_notesID,distance_threshold=0.9):
     vector_len = len(get_word_vector(col.get_note(noteID)[main_signification_field]))
 
     t = AnnoyIndex(vector_len, 'angular')
-    for i,v in enumerate(vectors):
+    for i,v in enumerate(all_vectors):
         t.add_item(i, v)
     t.build(10) # 10 trees
     t.save('chinese.ann')
@@ -112,7 +112,7 @@ def find_new_groups(col,note,main_signification_field,noteID,original_type_name,
             group.add(all_deck_notesID[nn_index])
         else:
             break # TODO: it's sorted, is there more pythonic way ?          
-    current_max_id,overall_edited_notes = update_notes_in_group( col, group_name, group_separator, current_max_id, overall_edited_notes, group)
+    current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group)
 
     return current_max_id
 
@@ -175,9 +175,10 @@ if __name__ == "__main__":
 
         if noteID in overall_edited_notes:
             # TODO
-            logger.warning("The note was already found in a group! What to do ?")
+            logger.info("The note was already found in a group.")
             breakpoint()
-            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
+            # TODO: calculate the average or max or other stat of the distance of words in all the groups   
+            current_max_id = find_new_groups(col,main_signification_field,noteID,current_max_id,all_vectors,overall_edited_notes,all_deck_notesID)
         
         # It's a group that I created manually : 
         # just need to find the other notes in the group and create the group ID
@@ -189,11 +190,11 @@ if __name__ == "__main__":
                 # TODO: make it more flexible
                 case "Chinois":
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
-                    current_max_id = assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes)
+                    current_max_id = assign_group_id_to_chinese_manual_group(col,main_signification_field,noteID,current_max_id,all_vectors,overall_edited_notes,all_deck_notesID)
 
         # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] :
-            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,vectors,overall_edited_notes)
+            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,all_vectors,overall_edited_notes)
                 
 
         # The group ID is already set: what do I need to edit? I must call this from the new note that is added to the group
@@ -203,7 +204,7 @@ if __name__ == "__main__":
         
         # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] :
-            current_max_id = find_new_groups(col,note,main_signification_field,noteID,original_type_name,current_max_id,notesID,all_vectors,overall_edited_notes,all_deck_notesID)
+            current_max_id = find_new_groups(col,main_signification_field,noteID,current_max_id,all_vectors,overall_edited_notes,all_deck_notesID)
                 
         else:
             # What else ?

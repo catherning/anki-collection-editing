@@ -1,9 +1,12 @@
 import numpy as np
 from typing import Callable, Optional
+from json import dump, load
 from anki.collection import Collection
 from loguru import logger
 from langdetect import detect
 import re
+from datetime import datetime
+from os import path
 import spacy
 from annoy import AnnoyIndex
 # from scipy.spatial.distance import cosine
@@ -14,11 +17,12 @@ from src.utils.utils import timeit
 import subprocess
 # TODO: make as arg
 
-GROUPS = {}
 # TODO: method to return the list of groups with main signification summary or an example
-
+# TODO methods to delete groups, especially starting from a number ?
 
 def get_last_id(col,original_type_name,query_field,group_separator,GROUPS):
+    if len(GROUPS)!=0:
+        return max(GROUPS.keys()) 
     i=0
     while True:
         i+=1
@@ -32,10 +36,11 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS):
                 note_type_name=original_type_name,
                 override_confirmation = True
             )
-            GROUPS[i]=notesID
+            GROUPS[str(i)]=notesID
         except ValueError:
             return i-1
     # TODO: save GROUPS. If given and not null, then it's easier to get last id
+
 
 
 def get_notes_to_edit(col,original_type_name):
@@ -59,7 +64,7 @@ def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", "):
 
 def update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS):
     current_max_id += 1 # FIXME: bof
-    GROUPS[current_max_id] = group
+    GROUPS[str(current_max_id)] = group
     assign_group_id(col,group,group_name,current_max_id, group_separator)
     overall_edited_notes.update(group)
     # TODO: change flag of notes so that we can still check manually just in case
@@ -124,10 +129,12 @@ def find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_no
         if all_deck_notesID[nn_index] not in overall_edited_notes and len(g1.intersection(g2))==0:
             group.add(all_deck_notesID[nn_index])
         elif all_deck_notesID[nn_index] in overall_edited_notes and all_deck_notesID[nn_index]!=noteID: # check que des dup ?
-            if len(g1.intersection(g2))==0 and g1!={""} and g2!={""}:
+            if len(g1.intersection(g2))!=0: # and g1!={""} and g2!={""}:
                 print(note["Synonyms group"],note_dup["Synonyms group"])
+                pass
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
-      
+    # TODO: what to do when group is of len(1) ???? no synonyms found... lower the threshold / use english vectors, makes it even more complicated
+    group = list(group)
     current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS)
 
     return current_max_id
@@ -145,6 +152,10 @@ def download_spacy_model(model_name):
 if __name__ == "__main__":
 
     yaml_file = "src/config.yaml"
+
+    # TODO: Load file name given by user as args
+    groups_file = "groups_ch_syn.json"
+    GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
 
     # TODO: change get_yaml_value to retrieve all values at once in a method
     lang = "zh" 
@@ -223,7 +234,9 @@ if __name__ == "__main__":
             # What else ?
             breakpoint()
             pass
-             
+    
+    now = datetime.now().strftime('%Y%m%d%H%M%S')
+    dump(GROUPS, open(f"{groups_file.split('.json')[0]}_{now}.json", 'w'))
         #         case "Allemand":
         #             lines = field_text.splitlines()
         #             group_elements = [line for line in lines if detect(line) == 'de']

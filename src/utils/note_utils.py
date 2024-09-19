@@ -31,7 +31,7 @@ class NoteConverter:
             self.interactive_field_mapping()
         self.original_field_list = []
         self.cloze_text_field = cloze_text_field
-        self.note_field_utils = NoteFieldsUtils(new_note_name,new_fields+[cloze_text_field])
+        self.note_field_utils = NoteFieldsUtils(self.col,new_note_name,new_fields+[cloze_text_field])
         
     def interactive_field_mapping(self):
         """Interactive method to map the fields of the new note type from the cloze fields
@@ -304,7 +304,7 @@ def find_notes(
     col: Collection,
     query: str = "",
     note_type_name: str = "Cloze",
-    verbose: bool = True,
+    verbose: int = 1,
     cloze_text_field: str = "Text",
     override_confirmation: bool = False,
 ) -> tuple[list[int], NotetypeDict | None]:
@@ -338,13 +338,14 @@ def find_notes(
     if len(notesID) == 0:
         raise ValueError("No notes found. Please review your query and cloze note type")
     else:
-        logger.info(f"Number of notes found: {len(notesID)}")
+        if verbose>=1:
+            logger.info(f"Number of notes found: {len(notesID)}")
         original_modelID = col.models.get_single_notetype_of_notes(notesID)
         original_model = col.models.get(original_modelID)
         for note in notesID:
             note_details = col.get_note(note)
 
-            if verbose:
+            if verbose>=2:
                 if original_model["type"] != CLOZE_TYPE:
                     logger.warning(
                         "The fields of the note of Basic type are not empty "

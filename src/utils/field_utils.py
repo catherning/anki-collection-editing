@@ -27,7 +27,7 @@ class NoteFieldsUtils:
         self.col = col
         self.note_type_name = note_type_name
         self.note_type = col.models.by_name(self.note_type_name)
-        self.field_names = fields_name
+        self.field_names = fields_name # TODO: user really need to give it?
 
     def add_field(self, field_name) -> None:
         """

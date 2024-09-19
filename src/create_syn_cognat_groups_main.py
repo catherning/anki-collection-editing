@@ -32,7 +32,7 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS):
             notesID, _ = find_notes(
                 col,
                 query=query,
-                verbose=False,
+                verbose=0,
                 note_type_name=original_type_name,
                 override_confirmation = True
             )
@@ -133,9 +133,11 @@ def find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_no
                 print(note["Synonyms group"],note_dup["Synonyms group"])
                 pass
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
-    # TODO: what to do when group is of len(1) ???? no synonyms found... lower the threshold / use english vectors, makes it even more complicated
-    group = list(group)
-    current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS)
+    
+    if len(group)>1:
+        # XXX: what to do when group is of len(1) ? lower the threshold / use english vectors, makes it even more complicated
+        group = list(group)
+        current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS)
 
     return current_max_id
 
@@ -182,7 +184,7 @@ if __name__ == "__main__":
                                 group_separator= group_separator,
                                 GROUPS=GROUPS)
 
-    print(current_max_id)
+    logger.info(f"Max group ID: {current_max_id}")
     overall_edited_notes = set()
     note_field = NoteFieldsUtils(col,original_type_name, [hint_field])
 
@@ -193,7 +195,7 @@ if __name__ == "__main__":
                 query="-is:new", # TODO: change to get all notes ? or remove some of them afterwards because it would be increasing with time and thus slow the get_vector_of_notes (and get nn ?) ?
                 note_type_name=original_type_name,
                 override_confirmation = True,
-                verbose=False
+                verbose=1
             )
     all_vectors = get_vector_of_notes(col,all_deck_notesID)
     vector_len = len(get_word_vector(col.get_note(all_deck_notesID[0])[main_signification_field]))
@@ -212,7 +214,7 @@ if __name__ == "__main__":
         # It's a group that I created manually : 
         # just need to find the other notes in the group and create the group ID
         elif note[hint_field] and not note[group_name]:
-            print(note[hint_field])
+            # print(note[hint_field])
             hints = note[hint_field].split()
             field_text = note_field.extract_text_from_field(note,hint_field)
             match original_type_name:

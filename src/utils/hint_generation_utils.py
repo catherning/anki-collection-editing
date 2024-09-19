@@ -6,8 +6,11 @@ from anki.models import ModelManager, NotetypeDict
 from bs4 import BeautifulSoup
 from loguru import logger
 
-from src.utils.field_utils import (extract_cloze_deletion,
-                   get_field_index, print_note_content, proceed, get_cloze_data, get_cleaned_field_data,
+from src.utils.field_utils import (NoteFieldsUtils,
+                                   #extract_cloze_deletion,
+                #    get_field_index, print_note_content, 
+                   proceed, 
+                #    get_cloze_data, get_cleaned_field_data,
                    breaklines_by_number)
 from src.utils.note_utils import find_notes
 from src.utils.utils import CLOZE_TYPE
@@ -59,6 +62,8 @@ class HintGenerator:
         self.query_field = query_field
         self.replace = replace
         self.break_lines = break_lines
+        self.note_field_utils = None
+
         
         
     def default_text_sorting_key(self,row):
@@ -91,6 +96,8 @@ class HintGenerator:
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
+        # TODO: instance it out of run? Then needs note_type_name at class instance
+        self.note_field_utils = NoteFieldsUtils(note_type_name,XXX)
         
         hint = self.generate_clean_hint(note_type_name, query)
         notes = []

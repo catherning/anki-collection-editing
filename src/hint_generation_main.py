@@ -13,7 +13,7 @@ if __name__ == "__main__":
     if 'col' not in globals():
         col = Collection(COL_PATH)
     
-    for note_type_name in ["Music"]: #"Chinois","Allemand"]:
+    for note_type_name in ["Chinois"]: #"Music","Chinois","Allemand"]:
         break_lines = False
 
         cloze_field = ""  # "Text"
@@ -74,14 +74,14 @@ if __name__ == "__main__":
             break_lines = break_lines,
         )
         
-        query = f'Krzysztof'
-        try:
+        # query = f'Krzysztof'
+        # try:
 
-            hint_adaptor.run(note_type_name,
-                                query,)
-        except ValueError as e:
-            print(query, e)
-            continue
+        #     hint_adaptor.run(note_type_name,
+        #                         query,)
+        # except ValueError as e:
+        #     print(query, e)
+        #     continue
 
         # for cent in ["19","20"]:
         #     for i in range(10):
@@ -94,35 +94,21 @@ if __name__ == "__main__":
         #             print(query, e)
         #             continue
 
+            
+        for hint_field in ["Synonyms"]: #,"Cognats"]:
+            query_field = f"{hint_field} group"
                 
-
-        # for hint_field in ["Synonyms","Cognats"]:
-        #     query_field = f"{hint_field} group"
+            # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+            i=0
+            while True:
+                i+=1
+                query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
                 
-        #     # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-        #     i=0
-        #     while True:
-        #         i+=1
-        #         query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-                
-        #         try:
-        #             generate_hint_main(
-        #                 COL_PATH,
-        #                 note_type_name,
-        #                 query,
-        #                 flds_in_hint,
-        #                 hint_field,
-        #                 additional_hint_field,
-        #                 additional_hint_func,
-        #                 sorting_key,
-        #                 sorting_field,
-        #                 separator=separator,
-        #                 break_lines=break_lines,
-        #                 # cloze_field=cloze_field,
-        #                 replace = True,
-        #                 query_field = query_field,
-        #                 group_separator = group_separator
-        #             )
-        #         except ValueError as e:
-        #             print(query, e)
-        #             break
+                try:
+                    hint_adaptor.run(
+                        note_type_name=note_type_name,
+                        query=query
+                    )
+                except ValueError as e:
+                    print(query, e)
+                    break

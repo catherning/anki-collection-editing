@@ -19,6 +19,26 @@ def proceed():
         exit()
 
 
+def extract_text(node):
+    """Recursively extract text from the BeautifulSoup node, handling blank lines."""
+    lines = []
+    for element in node.children:
+        # If it's a string, strip extra whitespace
+        if isinstance(element, str):
+            text = element.strip()
+            if text:
+                lines.append(text)
+        elif element.name == 'br':
+            # Treat <br> as a blank line
+            lines.append('\n')
+        elif element.name == 'div':
+            # If the div is empty or contains only &nbsp;, treat it as a blank line
+            if element.get_text(strip=True) == '':
+                lines.append('\n')
+            else:
+                # Recursively handle non-empty divs
+                lines.extend(extract_text(element))
+    return lines
 
 # for a specific note, provide methods for a specific field. there can be different objects for different fields ?
 # TODO: or one class for all fields ? as extention of note ?
@@ -60,10 +80,10 @@ class NoteFieldsUtils:
 
 
     def extract_text_from_field(self,note,field_name):
-        soup = BeautifulSoup(note[field_name], "html.parser")
-        for item in soup.select('span'):
-            item.extract()
-        return soup.get_text(" ")
+        html_content = note[field_name].replace('\n', ' ')
+        soup = BeautifulSoup(html_content, "html.parser")
+        lines = extract_text(soup)
+        return ' '.join(lines)
 
     def print_note_content(
         self, cloze_text_field: str, original_model: ModelsDictProxy, note_details: Note

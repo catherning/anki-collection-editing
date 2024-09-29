@@ -11,17 +11,17 @@ import spacy
 from annoy import AnnoyIndex
 # from scipy.spatial.distance import cosine
 # from sklearn.metrics.pairwise import cosine_similarity
-from src.utils.note_utils import find_notes, get_col_path, get_yaml_value
+from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
 import subprocess
 # TODO: make as arg
 
 # TODO: method to return the list of groups with main signification summary or an example
-# TODO methods to delete groups, especially starting from a number ?
+# TODO: methods to delete groups, especially starting from a number ?
 # TODO: method to clean synonyms field ? when there's a blank line between each line?
 
-def get_last_id(col,original_type_name,query_field,group_separator,GROUPS):
+def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_signification_field):
     if len(GROUPS)!=0:
         return max(GROUPS.keys()) 
     i=0
@@ -37,15 +37,20 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS):
                 note_type_name=original_type_name,
                 override_confirmation = True
             )
-            GROUPS[str(i)]=notesID
+            add_group_to_dict(col, GROUPS, main_signification_field, i, notesID)
         except ValueError:
             return i-1
-    # TODO: save GROUPS. If given and not null, then it's easier to get last id
+
+def add_group_to_dict(col, GROUPS, main_signification_field, group_id, notesID):
+    notes_info = []
+    for noteID in notesID:
+        note = col.get_note(noteID)
+        notes_info.append({"id":noteID,
+                           "text":note[main_signification_field]})
+    GROUPS[str(group_id)] = notes_info
 
 
-
-def get_notes_to_edit(col,original_type_name):
-    query = f'-is:new -is:suspended tag:marked'
+def get_notes_to_edit(col,original_type_name,query):
     return find_notes(
                 col,
                 query=query,
@@ -53,25 +58,25 @@ def get_notes_to_edit(col,original_type_name):
                 override_confirmation = True
             )
 
-def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", "):
+def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", ",tag="auto_edited"):
     notes = []
     for noteID in noteIDs:
         note = col.get_note(noteID)
         if note[group_name]:
             note[group_name] += group_separator
         note[group_name] += str(group_id)
+        note.add_tag(tag)
         notes.append(note)
     col.update_notes(notes)
 
-def update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS):
-    current_max_id += 1 # FIXME: bof
-    GROUPS[str(current_max_id)] = group
-    assign_group_id(col,group,group_name,current_max_id, group_separator)
+def update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS,tag="auto_edited"):
+    current_max_id += 1
+    add_group_to_dict(col, GROUPS, main_signification_field, current_max_id, group)
+    assign_group_id(col,group,group_name,current_max_id, group_separator,tag)
     overall_edited_notes.update(group)
-    # TODO: change flag of notes so that we can still check manually just in case
     return current_max_id, overall_edited_notes
 
-def assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes):
+def assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,tag):
     group_elements = re.findall("[\u4e00-\u9FFF]+|\n", field_text)
     groups = [[noteID]]
     for el in group_elements:
@@ -95,7 +100,7 @@ def assign_group_id_to_chinese_manual_group(col,noteID, field_text, original_typ
                 logger.warning("TODO: what to do if there's several notes with the same signification?") # TODO:
     for group in groups:
         if len(group) > 1:
-            current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS)
+            current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS,tag)
         else:
             continue
     return current_max_id  
@@ -119,13 +124,13 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_notesID,distance_threshold=0.9):    
+def find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
-    # TODO: or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
+    # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
     # most_similar = nlp.vocab.vectors.most_similar(vectors, n=10)
     note = col.get_note(noteID)
-    nn,distances = t.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
+    nn,distances = annoy_index.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
     group = {noteID}
     for nn_index,distance in zip(nn,distances):
         if distance>distance_threshold:
@@ -139,13 +144,13 @@ def find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_no
         elif all_deck_notesID[nn_index] in overall_edited_notes and all_deck_notesID[nn_index]!=noteID: # check que des dup ?
             if len(g1.intersection(g2))!=0: # and g1!={""} and g2!={""}:
                 print(note["Synonyms group"],close_note["Synonyms group"])
-                pass
+                continue
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
     
     if len(group)>1:
         # XXX: what to do when group is of len(1) ? lower the threshold / use english vectors, makes it even more complicated
         group = list(group)
-        current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS)
+        current_max_id,overall_edited_notes = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS,tag)
     return current_max_id
 
 
@@ -179,34 +184,37 @@ if __name__ == "__main__":
     COL_PATH = get_col_path(yaml_file)
     col = Collection(COL_PATH)
 
+    tag = "syn_created"  # Flags might have been better, but needs to get to the note cards
     hint_field = "Synonyms"
     group_name = f"{hint_field} group"
     main_signification_field = "Simplified"
     translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
+    query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     current_max_id = get_last_id(col,
                                 original_type_name,
                                 group_name,
                                 group_separator= group_separator,
-                                GROUPS=GROUPS)
+                                GROUPS=GROUPS,
+                                main_signification_field=main_signification_field)
 
     logger.info(f"Max group ID: {current_max_id}")
     overall_edited_notes = set()
     note_field = NoteFieldsUtils(col,original_type_name, [hint_field])
 
-    notesID, _ = get_notes_to_edit(col,original_type_name)
+    notesID, _ = get_notes_to_edit(col,original_type_name,query)
 
     all_deck_notesID,_ = find_notes(
                 col,
-                query="-is:new", # TODO: change to get all notes ? or remove some of them afterwards because it would be increasing with time and thus slow the get_vector_of_notes (and get nn ?) ?
+                query="-is:new", # Notes that are potential synonyms/cognats. We search for those that we already learned
                 note_type_name=original_type_name,
                 override_confirmation = True,
                 verbose=1
             )
     all_vectors = get_vector_of_notes(col,all_deck_notesID)
     vector_len = len(get_word_vector(col.get_note(all_deck_notesID[0])[main_signification_field]))
-    t = build_index(vector_len=vector_len,all_vectors=all_vectors)
+    annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
 
     for noteID in notesID:
         note = col.get_note(noteID)
@@ -214,25 +222,22 @@ if __name__ == "__main__":
 
         if noteID in overall_edited_notes:
             logger.info("The note was already found in a group.")
-            # breakpoint()
             # TODO: calculate the average or max or other stat of the distance of words in all the groups   
-            current_max_id = find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_notesID)
+            current_max_id = find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
         
-        # It's a group that I created manually : 
-        # just need to find the other notes in the group and create the group ID
+        # It's a group that I created manually : just need to find the other notes in the group and create the group ID
         elif note[hint_field] and not note[group_name]:
-            # print(note[hint_field])
             hints = note[hint_field].split()
-            field_text = note_field.extract_text_from_field(note,hint_field) # TODO: use NoteFieldUtils
+            field_text = note_field.extract_text_from_field(note,hint_field)
             match original_type_name:
                 # TODO: make it more flexible
                 case "Chinois":
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
-                    current_max_id = assign_group_id_to_chinese_manual_group(col,noteID,field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,) # all_vectors,all_deck_notesID
+                    current_max_id = assign_group_id_to_chinese_manual_group(col,noteID,field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,tag)
 
         # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] :
-            current_max_id = find_new_groups(col,noteID,current_max_id,t,overall_edited_notes,all_deck_notesID)
+            current_max_id = find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
                 
 
         elif note[hint_field] and note[group_name]:
@@ -246,7 +251,9 @@ if __name__ == "__main__":
     logger.success("Done!")
     
     now = datetime.now().strftime('%Y%m%d-%H-%M')
-    dump(GROUPS, open(f"{groups_file.split('.json')[0]}_{now}.json", 'w'))
+    with open(f"{groups_file.split('.json')[0]}_{now}.json", 'w',encoding="utf-8") as f:
+        dump(GROUPS, f,ensure_ascii=False)
+
         #         case "Allemand":
         #             lines = field_text.splitlines()
         #             group_elements = [line for line in lines if detect(line) == 'de']

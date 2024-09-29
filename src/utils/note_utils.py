@@ -31,7 +31,7 @@ class NoteConverter:
             self.interactive_field_mapping()
         self.original_field_list = []
         self.cloze_text_field = cloze_text_field
-        self.note_field_utils = NoteFieldsUtils(self.col,new_note_name,new_fields+[cloze_text_field])
+        self.note_field_utils = NoteFieldsUtils(self.col,new_note_name,new_fields+[cloze_text_field]) # FIXME: create a list of NoteFieldsUtils
         
     def interactive_field_mapping(self):
         """Interactive method to map the fields of the new note type from the cloze fields

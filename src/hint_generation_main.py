@@ -9,7 +9,7 @@ from src.utils.note_utils import get_col_path
 
 
 if __name__ == "__main__":
-    COL_PATH = get_col_path("config.yaml")
+    COL_PATH = get_col_path("src/config.yaml")
     if 'col' not in globals():
         col = Collection(COL_PATH)
     
@@ -28,7 +28,7 @@ if __name__ == "__main__":
                 sorting_key = None
                 additional_hint_func = None
                 # TODO: easiest : create a new field for the hint, don't override the existing field that the syn/cognats groups were eventually based on
-                hint_field=XXX 
+                hint_field="Generated Synonyms"
                 # for hint_field in ["Synonyms","Cognats"]:
                 #     query_field = f"{hint_field} group"
 
@@ -60,6 +60,7 @@ if __name__ == "__main__":
                 
         # TODO: check if HintGenerator is ok
         hint_adaptor = HintAdaptor(
+            note_type_name,
             flds_in_hint,
             col = col,
             hint_holding_field = hint_field,

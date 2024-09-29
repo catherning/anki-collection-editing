@@ -15,12 +15,15 @@ from src.utils.field_utils import (NoteFieldsUtils,
 from src.utils.note_utils import find_notes
 from src.utils.utils import CLOZE_TYPE
 
+# TODO: use dataclass for all classes
+
 class HintGenerator:
     def __init__(self, 
+                 note_type_name: str,
                  flds_in_hint:list[str], 
                  col_path:Optional[str]=None, 
                  col:Optional[Collection]=None,
-                 hint_holding_field: Optional[str]= "Extra", # make obligatory as if it's the default 
+                 hint_holding_field: Optional[str]= "Extra", # XXX: make obligatory as if it's the default 
                     # and it doesn't exists, might throw error?
                  sorting_field:Optional[str]=None,
                  sorting_key: Optional[Callable]=None,
@@ -50,6 +53,7 @@ class HintGenerator:
         self.col = Collection(col_path) if col is None else col
         if self.col is None:
             raise ValueError("You must provide either col_path or col")
+        self.note_type_name = note_type_name
         self.original_model = None
         self.hint_holding_field = hint_holding_field
         self.flds_in_hint = flds_in_hint
@@ -62,9 +66,13 @@ class HintGenerator:
         self.query_field = query_field
         self.replace = replace
         self.break_lines = break_lines
-        self.note_field_utils = None
+        # TODO: instance it out of run? Then needs note_type_name at class instance
+        self.note_field_utils = NoteFieldsUtils(self.col,note_type_name,self.hint_holding_field)
 
-        
+        # XXX: Create new field, but only do it if sure ? or not critical, can always be deleted manually ?
+        if self.hint_holding_field not in [el["name"] for el in self.note_type["flds"]]:
+            self.note_field_utils.add_field(self.hint_holding_field)
+
         
     def default_text_sorting_key(self,row):
         return row[1].lower()
@@ -74,7 +82,7 @@ class HintGenerator:
                 
     def run(
         self,
-        note_type_name: str,
+        note_type_name: str, # TODO: put in init
         query: str,
     ) -> None:
         """Main method to generate hints for several notes using their information.
@@ -96,10 +104,8 @@ class HintGenerator:
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
-        # TODO: instance it out of run? Then needs note_type_name at class instance
-        self.note_field_utils = NoteFieldsUtils(note_type_name,XXX)
         
-        hint = self.generate_clean_hint(note_type_name, query)
+        hint = self.generate_clean_hint(query)
         notes = []
         for nid in self.notesID:
             # TODO: check if ok
@@ -114,12 +120,12 @@ class HintGenerator:
 
         self.col.close()
 
-    def generate_clean_hint(self, note_type_name, query):
+    def generate_clean_hint(self, query):
         # TODO: see what to return bw note_hints_sorted and hint? if HintGen, only need hint because identical
         # If HintAdaptor, need note_hints_sorted bc need to adapt to each note afterwards
         
         self.notesID, self.original_model = find_notes(
-            self.col, query, note_type_name, verbose=True, cloze_text_field=self.cloze_field
+            self.col, query, self.note_type_name, verbose=True, cloze_text_field=self.cloze_field
         )
 
         if len(self.notesID) < 2:
@@ -349,13 +355,11 @@ class HintAdaptor(HintGenerator):
 
     def run(
         self,
-        note_type_name: str,
         query: str,
     ) -> None:
         """Main method to generate hints for several notes using their information.
 
         Args:
-            note_type_name (str): The name of the common note type
             query (str): The query to find the notes to update
             flds_in_hint (list[str]): The fields from where to extract the hint info.
             Ex: ["c2","c1"] if the notes are Cloze notes
@@ -370,7 +374,7 @@ class HintAdaptor(HintGenerator):
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
-        hint = self.generate_clean_hint(note_type_name, query)
+        hint = self.generate_clean_hint(query)
 
         notes = []
         for i,nid in enumerate(self.notesID):

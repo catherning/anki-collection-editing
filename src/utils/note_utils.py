@@ -110,7 +110,7 @@ class NoteConverter:
                 logger.warning(
                     f"Creation of the field '{field}' which is not present in new note type"
                 )
-                self.note_field_utils[field].add_field()
+                self.note_field_utils.add_field(field)
             col.models.save(new_note_type)
 
             self.change_note_type(original_model, new_note_type, notesID)
@@ -151,7 +151,7 @@ class NoteConverter:
         new_note_type = models.new(self.note_name)
 
         for i, field_info in enumerate(self.new_fields):
-            self.note_field_utils[field_info[0]].add_field()
+            self.note_field_utils.add_field(field_info[0])
 
             if field_info[1] not in self.original_field_list:
                 # Add template
@@ -274,7 +274,7 @@ class NoteConverter:
         if FIELD_WITH_ORIGINAL_CLOZE == self.new_fields[-1][0]:
             field_to_extract_index = -1
         else:
-            field_to_extract_index = self.note_field_utils[self.cloze_text_field].get_field_index()
+            field_to_extract_index = self.note_field_utils.get_field_index(self.cloze_text_field)
 
         notes = []
         for noteID in notesID:
@@ -283,8 +283,8 @@ class NoteConverter:
             ):  # Could use last value to see if it's a regex / cloze extraction
                 if field_origin not in self.original_field_list:
                     try:
-                        note.fields[i] = self.note_field_utils[self.cloze_text_field].extract_cloze_deletion(
-                            field_to_extract_index, note, field_origin
+                        note.fields[i] = self.note_field_utils.extract_cloze_deletion(
+                            field_to_extract_index, note, field_origin # or self.cloze_text_field ? FIXME
                         )
                     except Exception:
                         logger.info(
@@ -328,7 +328,7 @@ def find_notes(
 
     # Get the notes to edit
     new_query = query + f' note:"{note_type_name}"'
-    notefields = NoteFieldsUtils(col, note_type_name, [cloze_text_field])
+    notefields = NoteFieldsUtils(col, note_type_name)
     try:
         notesID = col.find_notes(new_query)
     except InvalidInput as e:

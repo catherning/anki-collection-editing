@@ -29,8 +29,8 @@ if __name__ == "__main__":
                 additional_hint_func = None
                 # TODO: easiest : create a new field for the hint, don't override the existing field that the syn/cognats groups were eventually based on
                 hint_field="Generated Synonyms"
-                # for hint_field in ["Synonyms","Cognats"]:
-                #     query_field = f"{hint_field} group"
+                for hint_field in ["Synonyms"]:#,"Cognats"]:
+                    query_field = f"{hint_field} group"
 
             case "Allemand":
                 sorting_key = romanic_sorting_key
@@ -95,21 +95,17 @@ if __name__ == "__main__":
         #             print(query, e)
         #             continue
 
+                
+        # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+        i=0
+        while True:
+            i+=1
+            query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
             
-        for hint_field in ["Synonyms"]: #,"Cognats"]:
-            query_field = f"{hint_field} group"
-                
-            # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-            i=0
-            while True:
-                i+=1
-                query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-                
-                try:
-                    hint_adaptor.run(
-                        note_type_name=note_type_name,
-                        query=query
-                    )
-                except ValueError as e:
-                    print(query, e)
-                    break
+            try:
+                hint_adaptor.run(
+                    query=query
+                )
+            except ValueError as e:
+                print(query, e)
+                break

@@ -19,8 +19,12 @@ def proceed():
         exit()
 
 
-def extract_text(node):
+def extract_text(node,transform_newline=False):
     """Recursively extract text from the BeautifulSoup node, handling blank lines."""
+    if transform_newline:
+        newline_replacement = " "
+    else:
+        newline_replacement = "\n"
     lines = []
     for element in node.children:
         # If it's a string, strip extra whitespace
@@ -30,39 +34,42 @@ def extract_text(node):
                 lines.append(text)
         elif element.name == 'br':
             # Treat <br> as a blank line
-            lines.append('\n')
-        elif element.name == 'div':
+            lines.append(newline_replacement)
+        else:
             # If the div is empty or contains only &nbsp;, treat it as a blank line
             if element.get_text(strip=True) == '':
-                lines.append('\n')
+                lines.append(newline_replacement)
             else:
                 # Recursively handle non-empty divs
-                lines.extend(extract_text(element))
+                lines.extend(extract_text(element)) # FIXME: still some issues for hint generation
     return lines
 
-# for a specific note, provide methods for a specific field. there can be different objects for different fields ?
-# TODO: or one class for all fields ? as extention of note ?
 class NoteFieldsUtils:
-    def __init__(self, col: Collection, note_type_name: str,field_name: str):
+    def __init__(self, col: Collection, note_type_name: str):
         self.col = col
         self.note_type_name = note_type_name
         self.note_type = col.models.by_name(self.note_type_name)
-        breakpoint()
-        self.field_name = field_name # TODO: user really need to give it?
 
-    def add_field(self) -> None:
+    def check_field_exists(self,field_name) -> bool:
+        return field_name in [fld["name"] for fld in self.note_type["flds"]]
+
+    def add_field(self,field_name) -> None:
         """
         Adds the new field to the note type.
 
         Returns:
         None
         """
-        fieldDict = self.col.models.new_field(self.field_name)
-        self.col.models.add_field(self.note_type, fieldDict)
+        if not self.check_field_exists(field_name):
+            logger.info(f"Creating new field {field_name} to the note type.")
+            fieldDict = self.col.models.new_field(field_name)
+            self.col.models.add_field(self.note_type, fieldDict)
+            self.col.models.save(self.note_type)
 
-    def get_field_index(self) -> int:
+    def get_field_index(self,field_name) -> int:
+        # TODO: make try except
         return list(
-            filter(lambda field: field["name"] == self.field_name, self.note_type["flds"])
+            filter(lambda field: field["name"] == field_name, self.note_type["flds"])
         )[0]["ord"]
 
     def extract_cloze_deletion(self,field_to_extract_index, note, cloze_deletion) -> str:
@@ -80,11 +87,15 @@ class NoteFieldsUtils:
             raise Exception(f"Regex {regex} incorrect.")
 
 
-    def extract_text_from_field(self,note):
-        html_content = note[self.field_name].replace('\n', ' ')
-        soup = BeautifulSoup(html_content, "html.parser")
-        lines = extract_text(soup)
-        return ' '.join(lines)
+    def extract_text_from_field(self,note,field_name,transform_newline=False):
+        if self.check_field_exists(field_name):
+            html_content = note[field_name].replace('\n', ' ')
+            soup = BeautifulSoup(html_content, "html.parser")
+            lines = extract_text(soup,transform_newline=transform_newline)
+            text = ' '.join(lines)
+            return text
+        else:
+            raise ValueError(f"Field {field_name} does not exist.")
 
     def print_note_content(
         self, cloze_text_field: str, original_model: ModelsDictProxy, note_details: Note
@@ -105,12 +116,12 @@ class NoteFieldsUtils:
         # TODO: check if given note is of correct type
         content = ""
         for field in flds_in_hint:
-            text = self.extract_text_from_field(note)
+            text = self.extract_text_from_field(note,field,transform_newline=True)
             clean_text = truncate_field([t for t in text.splitlines() if t][0], 60)
             content += clean_text + separator
         return content
 
-    def get_cloze_data(self, flds_in_hint, cloze_field_index, separator, sorting_field, c_err, note):
+    def get_cloze_data(self, flds_in_hint, cloze_field_index, separator, c_err, note):
         content = ""
         for cloze in flds_in_hint:
             try:

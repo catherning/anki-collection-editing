@@ -20,9 +20,11 @@ import subprocess
 # TODO: method to return the list of groups with main signification summary or an example
 # TODO: methods to delete groups, especially starting from a number ?
 # TODO: method to clean synonyms field ? when there's a blank line between each line?
+# TODO: apply group ID from json file
 
 def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_signification_field):
     if len(GROUPS)!=0:
+        # TODO: check that last group ID exists indeed in the database
         return max(GROUPS.keys()) 
     i=0
     while True:
@@ -201,7 +203,7 @@ if __name__ == "__main__":
 
     logger.info(f"Max group ID: {current_max_id}")
     overall_edited_notes = set()
-    note_field = NoteFieldsUtils(col,original_type_name, [hint_field])
+    note_field = NoteFieldsUtils(col,original_type_name)
 
     notesID, _ = get_notes_to_edit(col,original_type_name,query)
 

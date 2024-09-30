@@ -34,21 +34,23 @@ class HintGenerator:
                  group_separator:Optional[str]=None,
                  break_lines: bool = False,
                  ):
-        # col (Collection): The Anki collection
-        # note_hints_sorted (list[str]): The cleaned global hint
-        # original_model (ModelManager): The type of the note
-        # nicled (int): The ID of the note
-        # cur_note_hint (str): The hint corresponding to the current note
-        # hint_holding_field (str): The field that will be populated with the hint
-        # cloze_field (str): The field with the cloze text (only for
-        # logging purposes)
-        # additional_hint_field (Optional[str]): The field with the eventual
-        # additional hint.
-        # If not given, then we hide the hint info with '?'. Otherwise, for now,
-        # we show the first character of the info in the additional_hint_field
-        # break_lines (bool, optional): If you want breaklines. For now it only works
-        # if the sorting field is numerical (years) and it add breaklines between decades.
-        # Defaults to False.
+        """
+        col (Collection): The Anki collection
+        note_hints_sorted (list[str]): The cleaned global hint
+        original_model (ModelManager): The type of the note
+        nicled (int): The ID of the note
+        cur_note_hint (str): The hint corresponding to the current note
+        hint_holding_field (str): The field that will be populated with the hint
+        cloze_field (str): The field with the cloze text (only for
+        logging purposes)
+        additional_hint_field (Optional[str]): The field with the eventual
+        additional hint.
+        If not given, then we hide the hint info with '?'. Otherwise, for now,
+        we show the first character of the info in the additional_hint_field
+        break_lines (bool, optional): If you want breaklines. For now it only works
+        if the sorting field is numerical (years) and it add breaklines between decades.
+        Defaults to False.
+        """
 
         self.col = Collection(col_path) if col is None else col
         if self.col is None:
@@ -67,11 +69,11 @@ class HintGenerator:
         self.replace = replace
         self.break_lines = break_lines
         # TODO: instance it out of run? Then needs note_type_name at class instance
-        self.note_field_utils = NoteFieldsUtils(self.col,note_type_name,self.hint_holding_field)
+        self.note_field_utils = NoteFieldsUtils(self.col,note_type_name)
 
         # XXX: Create new field, but only do it if sure ? or not critical, can always be deleted manually ?
-        if self.hint_holding_field not in [el["name"] for el in self.note_type["flds"]]:
-            self.note_field_utils.add_field(self.hint_holding_field)
+        # if self.hint_holding_field not in [el["name"] for el in self.note_type["flds"]]:
+        self.note_field_utils.add_field(self.hint_holding_field)
 
         
     def default_text_sorting_key(self,row):
@@ -82,13 +84,11 @@ class HintGenerator:
                 
     def run(
         self,
-        note_type_name: str, # TODO: put in init
         query: str,
     ) -> None:
         """Main method to generate hints for several notes using their information.
 
         Args:
-            note_type_name (str): The name of the common note type
             query (str): The query to find the notes to update
             flds_in_hint (list[str]): The fields from where to extract the hint info.
             Ex: ["c2","c1"] if the notes are Cloze notes
@@ -134,7 +134,7 @@ class HintGenerator:
             )
 
         self.cloze_field_index = (
-            get_field_index(self.original_model, self.cloze_field)
+            self.note_field_utils.get_field_index(self.original_model, self.cloze_field)
             if self.original_model["type"] == CLOZE_TYPE
             else None
         )
@@ -192,14 +192,14 @@ class HintGenerator:
             # Otherwise, do I need to check note type each time, not above for loop?
             
             if note._note_type["type"] == CLOZE_TYPE:
-                content = get_cloze_data(self.flds_in_hint, 
+                content = self.note_field_utils.get_cloze_data(self.flds_in_hint, 
                                          self.cloze_field_index, self.separator, 
                                          self.sorting_field, c_err, note)
-                sorting_info = extract_cloze_deletion(
+                sorting_info = self.note_field_utils.extract_cloze_deletion(
                     self.cloze_field_index, note, self.sorting_field
                 )
             else:
-                content = get_cleaned_field_data(self.separator, note, self.flds_in_hint)  
+                content = self.note_field_utils.get_cleaned_field_data(self.separator, note, self.flds_in_hint)  
                 sorting_info = BeautifulSoup(note[self.sorting_field], "html.parser").text
                 
             content = content[:len(content)-len(self.separator)] # remove last separator that is useless
@@ -233,7 +233,7 @@ class HintGenerator:
         temp = sorted(zip(note_hints_sorted, self.notesID), key=lambda zipped_list: self.sorting_key(zipped_list[0]))
         note_hints_sorted, self.notesID = zip(*temp)
         
-        # Issue with sorting pinyin for now:
+        # Issue with sorting pinyin for now:f
         # ex yunmi < yunan whereas it should be the opposite (yu<yun)
         note_hints_sorted = [el[0] for el in note_hints_sorted]
 
@@ -321,7 +321,7 @@ class HintAdaptor(HintGenerator):
                 self.additional_hint_func = lambda text: text[0]
             
             if self.original_model["type"] == CLOZE_TYPE:
-                field_raw_text = extract_cloze_deletion(self.cloze_field_index, note, self.additional_hint_field)
+                field_raw_text = self.note_field_utils.extract_cloze_deletion(self.cloze_field_index, note, self.additional_hint_field)
             else:
                 try:
                     field_raw_text = note[self.additional_hint_field]
@@ -339,7 +339,7 @@ class HintAdaptor(HintGenerator):
 
         logger.info(
             "Hint adapted for the current note"
-            f" {print_note_content(self.cloze_field, self.original_model, note)}:"
+            f" {self.note_field_utils.print_note_content(self.cloze_field, self.original_model, note)}:"
         )
         for el in hint.split("<br>"):
             print(el)
@@ -374,6 +374,10 @@ class HintAdaptor(HintGenerator):
         Raises:
             ValueError: If there is only 0 or 1 note found with the query
         """
+        try:
+            self.col.reopen()
+        except AssertionError:
+            pass
         hint = self.generate_clean_hint(query)
 
         notes = []

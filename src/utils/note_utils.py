@@ -122,7 +122,7 @@ class NoteConverter:
         )
         
         logger.info("Confirm the mappings and save notes ? (Y/n)")
-        if input() == "Y":
+        if input() == "y":
             col.update_notes(edited_notes)
             logger.success("New notes created and saved in the collection!")
         else:

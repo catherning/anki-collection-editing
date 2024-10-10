@@ -33,6 +33,8 @@ class HintGenerator:
                  cloze_field:Optional[int]=None, 
                  group_separator:Optional[str]=None,
                  break_lines: bool = False,
+                 override_confirm: bool = False,
+                 verbose: int = 1,
                  ):
         """
         col (Collection): The Anki collection
@@ -68,6 +70,8 @@ class HintGenerator:
         self.query_field = query_field
         self.replace = replace
         self.break_lines = break_lines
+        self.override_confirm = override_confirm
+        self.verbose = verbose
         # TODO: instance it out of run? Then needs note_type_name at class instance
         self.note_field_utils = NoteFieldsUtils(self.col,note_type_name)
 
@@ -114,7 +118,7 @@ class HintGenerator:
             notes.append(note)
 
         logger.info("Confirm the hint generation and save notes ? (Y/n)")
-        if input() == "Y":
+        if self.override_confirm or input() == "y":
             self.col.update_notes(notes)
             logger.success("New note hints saved in the collection!")
 
@@ -125,7 +129,7 @@ class HintGenerator:
         # If HintAdaptor, need note_hints_sorted bc need to adapt to each note afterwards
         
         self.notesID, self.original_model = find_notes(
-            self.col, query, self.note_type_name, verbose=True, cloze_text_field=self.cloze_field
+            self.col, query, self.note_type_name, verbose=self.verbose, cloze_text_field=self.cloze_field,override_confirmation=self.override_confirm
         )
 
         if len(self.notesID) < 2:
@@ -160,8 +164,9 @@ class HintGenerator:
             logger.error("There might have been an error with the sorting key.")
             exit()
 
-        logger.info("The hint that will be repercuted to all notes is:")
-        logger.info(hint)
+        if self.verbose:
+            logger.info("The hint that will be repercuted to all notes is:")
+            print(hint)
         return hint
     
 
@@ -255,7 +260,7 @@ class HintAdaptor(HintGenerator):
         self.additional_hint_func = additional_hint_func
         
     def append_if_not_first_group(self, query, note):
-        if not self.group_separator:
+        if not self.group_separator: # XXX: there's no group separator only for cognats ?
             return self.replace
 
         # query_field = query.split(":")[0].replace('"','')
@@ -266,10 +271,11 @@ class HintAdaptor(HintGenerator):
         
         # The only case where we override the user input of replace is the following:
         # If user wants to replace the hints from scratch, and the current note was already 
-        # edited with the script
+        # edited with the script, id est, the current note is part of several groups and we already added the hints of a previous group
         if self.group_separator in note[self.query_field] and self.replace:
             note_groups = [int(el) for el in note[self.query_field].split(self.group_separator)]
             if current_group_ID in note_groups:
+                # TODO: fix this when running several times
                 return False
         return self.replace
 
@@ -336,13 +342,14 @@ class HintAdaptor(HintGenerator):
 
 
         hint = self.get_adapted_string_hint_from_list(idx, hidding_char)
-
-        logger.info(
-            "Hint adapted for the current note"
-            f" {self.note_field_utils.print_note_content(self.cloze_field, self.original_model, note)}:"
-        )
-        for el in hint.split("<br>"):
-            print(el)
+        
+        if self.verbose:
+            logger.info(
+                "Hint adapted for the current note"
+                f" {self.note_field_utils.print_note_content(self.cloze_field, self.original_model, note)}:"
+            )
+            for el in hint.split("<br>"):
+                print(el)
 
         override_replace = self.append_if_not_first_group(query, note)
 
@@ -390,7 +397,7 @@ class HintAdaptor(HintGenerator):
             notes.append(note)
 
         logger.info("Confirm the hint generation and save notes ? (Y/n)")
-        if input() == "Y":
+        if self.override_confirm or input() == "y":
             self.col.update_notes(notes)
             logger.success("New note hints saved in the collection!")
 

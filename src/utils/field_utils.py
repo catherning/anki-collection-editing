@@ -9,12 +9,12 @@ from loguru import logger
 from src.utils.utils import CLOZE_TYPE
 
 def proceed():
-    print("Proceed ? (Y/n)")
+    print("Proceed ? (y/n)")
     a = input()
     if a == "y":
-        logger.info("Please write 'Y' if you want to proceed.")
+        logger.info("Please write 'y' if you want to proceed.")
         a = input()
-    if a != "Y":
+    if a != "y":
         logger.info("Stopping prematurely at the user's request")
         exit()
 
@@ -65,6 +65,7 @@ class NoteFieldsUtils:
             fieldDict = self.col.models.new_field(field_name)
             self.col.models.add_field(self.note_type, fieldDict)
             self.col.models.save(self.note_type)
+        print("Field created !")
 
     def get_field_index(self,field_name) -> int:
         # TODO: make try except
@@ -92,6 +93,7 @@ class NoteFieldsUtils:
             html_content = note[field_name].replace('\n', ' ')
             soup = BeautifulSoup(html_content, "html.parser")
             lines = extract_text(soup,transform_newline=transform_newline)
+            lines = remove_pos_tags_from_lines(lines)
             text = ' '.join(lines)
             return text
         else:
@@ -138,6 +140,24 @@ class NoteFieldsUtils:
                     # TODO: warnings / error if cloze type but fields given or the opposite
         return content
 
+
+def remove_pos_tags_from_lines(lines: list[str]):
+    # TODO: normally, remove/move tags to other field separately from hint generation
+    POS_tags = [
+        "ADJ", 	"ADP", 	"PUNCT"
+        "ADV", 	"AUX", 	"SYM"
+        "INTJ", 	"CCONJ",
+        "NOUN", 	"DET", 	 
+        "PROPN", 	"NUM", 	 
+        "VERB", 	"PART", "PRON" 	 
+        ]    
+    for i,el in enumerate(lines):
+        if el in POS_tags:
+            lines.pop(i)
+    if lines[0]=="\n":
+        lines.pop(0)
+    return lines
+    
 
 def truncate_field(field: str, max_length: int = 30) -> str:
     return (

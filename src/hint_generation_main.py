@@ -19,6 +19,7 @@ if __name__ == "__main__":
         cloze_field = ""  # "Text"
         group_separator = ", "
         query_field = "Year"
+        override_confirm = True
 
         match note_type_name:
             case "Chinois":
@@ -27,10 +28,9 @@ if __name__ == "__main__":
                 sorting_field = additional_hint_field = "Pinyin.1"
                 sorting_key = None
                 additional_hint_func = None
-                # TODO: easiest : create a new field for the hint, don't override the existing field that the syn/cognats groups were eventually based on
-                hint_field="Generated Synonyms"
-                for hint_field in ["Synonyms"]:#,"Cognats"]:
-                    query_field = f"{hint_field} group"
+                for type in ["Synonyms"]:#,"Cognats"]:
+                    hint_field= f"Generated {type}"
+                    query_field = f"{type} group"
 
             case "Allemand":
                 sorting_key = romanic_sorting_key
@@ -70,11 +70,29 @@ if __name__ == "__main__":
             group_separator = group_separator,
             additional_hint_field = additional_hint_field,
             additional_hint_func = additional_hint_func,
-            replace = False,
+            replace = True,
             query_field = query_field,
             break_lines = break_lines,
+            override_confirm = override_confirm,
+            verbose = 0,
         )
         
+                
+        # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
+        i=31
+        while True:
+            i+=1
+            query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
+            
+            try:
+                hint_adaptor.run(
+                    query=query
+                )
+            except ValueError as e:
+                print(query, e)
+                break
+
+
         # query = f'Krzysztof'
         # try:
 
@@ -94,18 +112,3 @@ if __name__ == "__main__":
         #         except ValueError as e:
         #             print(query, e)
         #             continue
-
-                
-        # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-        i=0
-        while True:
-            i+=1
-            query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-            
-            try:
-                hint_adaptor.run(
-                    query=query
-                )
-            except ValueError as e:
-                print(query, e)
-                break

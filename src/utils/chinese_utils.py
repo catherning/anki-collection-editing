@@ -21,7 +21,7 @@ def fill_pinyin(COL_PATH, note_type_name, field_to_fill, source_field, query):
     
         notes.append(note)
 
-    if input("Confirm save ?") == "Y":
+    if input("Confirm save ?") == "y":
         col.update_notes(notes)
 
     col.close()

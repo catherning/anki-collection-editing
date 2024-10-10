@@ -99,7 +99,7 @@ or
 ```bash
 python src/hint_generation.py
 ```
-During the conversion / hint generation, you will be prompted to input `"Y"` to confirm the steps and continue the edition of the notes.
+During the conversion / hint generation, you will be prompted to input `"y"` to confirm the steps and continue the edition of the notes.
 
 TODO: add pictures of the logs
 
@@ -149,7 +149,7 @@ for album_cloze in clozes:
                 continue
 ```
 
-When the query is correct, you can automatically run the script and always input `"Y"` with
+When the query is correct, you can automatically run the script and always input `"y"` with
 `yes Y | python src/cloze2basic.py` in `Linux`
 or 
 `, 'Y' * 200 | python src/cloze2basic.py` in `Powershell`

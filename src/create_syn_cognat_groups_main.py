@@ -8,9 +8,7 @@ import re
 from datetime import datetime
 from os import path
 import spacy
-from annoy import AnnoyIndex
-# from scipy.spatial.distance import cosine
-# from sklearn.metrics.pairwise import cosine_similarity
+from annoy import AnnoyIndex 
 from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
@@ -30,6 +28,7 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_s
     while True:
         i+=1
         query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
+        # query is something like "Synonyms group:re:(^|, )1(, |$)"
 
         try: 
             notesID, _ = find_notes(
@@ -126,7 +125,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
+def find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.8,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -244,6 +243,7 @@ if __name__ == "__main__":
 
         elif note[hint_field] and note[group_name]:
             # The group ID is already set, all is well
+            # TODO: should I remove the is:suspended ect that are in the query ? bc if rerun, they 
             pass
                 
         else:
@@ -251,6 +251,7 @@ if __name__ == "__main__":
             breakpoint()
             pass
     logger.success("Done!")
+
     
     now = datetime.now().strftime('%Y%m%d-%H-%M')
     with open(f"{groups_file.split('.json')[0]}_{now}.json", 'w',encoding="utf-8") as f:

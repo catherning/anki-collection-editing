@@ -2,3 +2,9 @@ data/
 __pycache__/
 anki_utils.py
 .vscode
+collection.anki2
+config.yaml
+collection.anki2-wal
+anki-collection-editing.code-workspace
+*.bin
+*.gz

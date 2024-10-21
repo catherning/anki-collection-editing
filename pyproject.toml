@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "anki-collection-editing"
+version = "0.1.0"
+description = ""
+authors = ["catherning"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+anki = "2.1.49"
+beautifulsoup4 = "4.12.2"
+certifi = "2023.7.22"
+charset-normalizer = "3.2.0"
+decorator = "5.1.1"
+distro = "1.8.0"
+idna = "3.4"
+loguru = "0.7.0"
+markdown = "3.4.4"
+orjson = "3.9.10"
+protobuf = "3.20"
+pysocks = "1.7.1"
+requests = "2.31.0"
+soupsieve = "2.4.1"
+urllib3 = "2.0.4"
+nltk = "^3.8.1"
+pyyaml = "^6.0.1"
+langdetect = "^1.0.9"
+fasttext = {git = "https://github.com/cfculhane/fastText"}
+scikit-learn = "^1.5.0"
+spacy = "^3.7.5"
+annoy = "^1.17.3"
+
+[tool.poetry.group.languages]
+
+[tool.poetry.group.languages.dependencies]
+pinyin-jyutping = "^0.9"
+
+
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

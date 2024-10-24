@@ -144,8 +144,7 @@ def find_new_groups(col,noteID,current_max_id,annoy_index,overall_edited_notes,a
             group.add(all_deck_notesID[nn_index])
         elif all_deck_notesID[nn_index] in overall_edited_notes and all_deck_notesID[nn_index]!=noteID: # check que des dup ?
             if len(g1.intersection(g2))!=0: # and g1!={""} and g2!={""}:
-                print(note["Synonyms group"],close_note["Synonyms group"])
-                continue
+                logger.warning(note["Synonyms group"],close_note["Synonyms group"])
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
     
     if len(group)>1:
@@ -253,6 +252,8 @@ if __name__ == "__main__":
     translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
+
+    # TODO: run with query of Synonyms group not empty to recreate all groups with ID
     query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     GROUPS = generate_groups_ids(GROUPS, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query)
 

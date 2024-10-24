@@ -79,11 +79,9 @@ if __name__ == "__main__":
         
                 
         # Itère sur query : chiffre par chiffre. Si retrouve une carte, doit append le hint, pas remplacer
-        i=31
+        i=1
         while True:
-            i+=1
             query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-            
             try:
                 hint_adaptor.run(
                     query=query
@@ -91,6 +89,7 @@ if __name__ == "__main__":
             except ValueError as e:
                 print(query, e)
                 break
+            i+=1
 
 
         # query = f'Krzysztof'

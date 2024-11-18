@@ -54,6 +54,7 @@ def add_group_to_dict(col, GROUPS, main_signification_field, group_id, notesID):
 
 
 def get_notes_to_edit(col,original_type_name,query):
+    logger.info("Finding notes to edit.")
     return find_notes(
                 col,
                 query=query,
@@ -96,13 +97,14 @@ def assign_group_id_to_chinese_manual_group(col,GROUPS,noteID, field_text, origi
             # It's part of another group too
             groups.append([noteID])
         else:
-            query = f"{main_signification_field}:{el}"
+            query = f'"{main_signification_field}:re:^(<div>)?{el}(</div>)?$"'
             try:
                 found_group_notes, _ = find_notes(
                     col,
                     query=query,
                     note_type_name=original_type_name,
-                    override_confirmation = True
+                    override_confirmation = True,
+                    verbose=0
                 )
             except ValueError:
                 continue
@@ -136,7 +138,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
+def find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -175,7 +177,7 @@ def download_spacy_model(model_name):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while downloading the model: {e.stderr}")
 
-def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh"):
+def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True):
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
     current_max_id = get_last_id(col,
                                 original_type_name,
@@ -183,12 +185,14 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                                 group_separator= group_separator,
                                 GROUPS=GROUPS,
                                 main_signification_field=main_signification_field)
-    logger.info(f"Max group ID: {current_max_id}")
+
+    logger.info(f"Max group ID: {current_max_id+1}")
     overall_edited_notes = set()
     note_field_utils = NoteFieldsUtils(col,original_type_name)
 
     notesID, _ = get_notes_to_edit(col,original_type_name,query)
 
+    logger.info("Finding all notes of the same type.")
     all_deck_notesID,_ = find_notes(
                 col,
                 query="-is:new", # Notes that are potential synonyms/cognats. We search for those that we already learned
@@ -204,42 +208,49 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         download_spacy_model(f'{lang}_core_web_md')
         nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
     logger.info("Model loaded.")
-
-    all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils)
-    vector_len = len(get_word_vector(nlp,col.get_note(all_deck_notesID[0])[main_signification_field]))
-    annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
+    
+    if vector_search:
+        all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils)
+        vector_len = len(get_word_vector(nlp,col.get_note(all_deck_notesID[0])[main_signification_field]))
+        annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
 
     for noteID in notesID:
         note = col.get_note(noteID)
-        logger.info("Finding synonyms/cognats for " + note[main_signification_field])
 
         if noteID in overall_edited_notes:
-            logger.info("The note was already found in a group.")
-            # TODO: calculate the average or max or other stat of the distance of words in all the groups   
-            current_max_id,overall_edited_notes,GROUPS = find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
+            # TODO: calculate the average or max or other stat of the distance of words in all the manually created groups to know the threshold   
+            if vector_search:
+                logger.warning(f"The note '{note[main_signification_field]}' was already found in a group. Searching new syn/cognats group.")
+                current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
+            else:
+                logger.info(f"The not '{note[main_signification_field]}' was already found in a group. Doing nothing.")
         
         # It's a group that I created manually : just need to find the other notes in the group and create the group ID
         elif note[hint_field] and not note[group_name]:
+            logger.info(f"Assign group ID {current_max_id+1} for '{note[main_signification_field]}'.")
             hints = note[hint_field].split()
             field_text = note_field_utils.extract_text_from_field(note,hint_field)
             match original_type_name:
                 # TODO: make it more flexible
                 case "Chinois":
                     # Find the notes with the same signification/cognats, id est, that are in the same group 
-                    current_max_id = assign_group_id_to_chinese_manual_group(col,GROUPS,noteID,field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,tag)
+                    current_max_id,overall_edited_notes,GROUPS = assign_group_id_to_chinese_manual_group(col,GROUPS,noteID,field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,tag)
 
         # It's not in a group yet. I need to find the group using word embeddings
-        elif not note[hint_field] :
-            current_max_id,overall_edited_notes,GROUPS = find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
+        elif not note[hint_field] and vector_search:
+            logger.info(f"Finding synonyms/cognats for '{note[main_signification_field]}' using vector search for new group ID {current_max_id+1}")
+            current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
                 
 
         elif note[hint_field] and note[group_name]:
+            logger.info(f"'{note[main_signification_field]}' already in a group with a group ID.")
             # The group ID is already set, all is well
-            # TODO: should I remove the is:suspended ect that are in the query ? bc if rerun, they 
-            pass
+            # TODO: should I remove the is:suspended ect that are in the query ? bc if rerun, they
+            # XXX: Because of this elif where I don't do anything, can't find other groups for the note
                 
         else:
-            # What else ?
+            # What else ? only this case : Not in a group yet but no vector_search ?
+            logger.warning(f"What's happening for '{note[main_signification_field]}'?")
             breakpoint()
             pass
     
@@ -250,55 +261,17 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
             NOTE_GROUPS[noteID["id"]]["text"] = noteID["text"]
             NOTE_GROUPS[noteID["id"]]["groups"].append(k)
     reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag="auto_edited")
+    col.close()
 
     logger.success("Done!")
-    return GROUPS
-
-if __name__ == "__main__":
-
-    yaml_file = "src/config.yaml"
-
-    # TODO: Load file name given by user as args
-    groups_file = "groups_ch_syn.json"
-    GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
-
-    # TODO: change get_yaml_value to retrieve all values at once in a method
-    lang = "zh" 
-    try:
-        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-    except OSError:
-        download_spacy_model(f'{lang}_core_web_md')
-        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-
-    logger.info("Model loaded")
-    
-    COL_PATH = get_col_path(yaml_file)
-    col = Collection(COL_PATH)
-
-    tag = "syn_created"  # Flags might have been better, but needs to get to the note cards
-    hint_field = "Synonyms"
-    group_name = f"{hint_field} group"
-    main_signification_field = "Simplified"
-    translation_field = "Meaning"
-    original_type_name = "Chinois"
-    group_separator = ", "
-
-    # TODO: run with query of Synonyms group not empty to recreate all groups with ID
-    query = f'-is:new -is:suspended tag:marked -tag:{tag}'
-    GROUPS = generate_groups_ids(GROUPS, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query)
-
-    
     now = datetime.now().strftime('%Y%m%d-%H-%M')
     with open(f"{now}_{groups_file.split('.json')[0]}.json", 'w',encoding="utf-8") as f:
         dump(GROUPS, f,ensure_ascii=False)
     with open(f"{now}_{groups_file.split('.json')[0]}_noteview.json", 'w',encoding="utf-8") as f:
         dump(NOTE_GROUPS, f,ensure_ascii=False)
 
-        #         case "Allemand":
-        #             lines = field_text.splitlines()
-        #             group_elements = [line for line in lines if detect(line) == 'de']
-        
-    col.close()
+    return GROUPS
+
 
 if __name__ == "__main__":
 
@@ -317,5 +290,8 @@ if __name__ == "__main__":
     # translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
-    query = f'-is:new -is:suspended tag:marked -tag:{tag}'
-    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query)
+
+    # query = f'-is:new -is:suspended tag:marked -tag:{tag}' # XXX: need -tag ?
+    query = 'Synonyms:_* "Synonyms group:" rated:15'
+    # TODO: fix the duplicated groups...
+    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)

@@ -265,9 +265,11 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
 
     logger.success("Done!")
     now = datetime.now().strftime('%Y%m%d-%H-%M')
-    with open(f"{now}_{groups_file.split('.json')[0]}.json", 'w',encoding="utf-8") as f:
+    main_file_name = f"{now}_{groups_file.split('.json')[0]}"
+    logger.info(f"Saving in {main_file_name}.json and {main_file_name}_noteview.json")
+    with open(f"{main_file_name}.json", 'w',encoding="utf-8") as f:
         dump(GROUPS, f,ensure_ascii=False)
-    with open(f"{now}_{groups_file.split('.json')[0]}_noteview.json", 'w',encoding="utf-8") as f:
+    with open(f"{main_file_name}_noteview.json", 'w',encoding="utf-8") as f:
         dump(NOTE_GROUPS, f,ensure_ascii=False)
 
     return GROUPS
@@ -291,7 +293,7 @@ if __name__ == "__main__":
     original_type_name = "Chinois"
     group_separator = ", "
 
-    # query = f'-is:new -is:suspended tag:marked -tag:{tag}' # XXX: need -tag ?
-    query = 'Synonyms:_* "Synonyms group:" rated:15'
+    query = f'-is:new -is:suspended tag:marked -tag:{tag}' # XXX: need -tag ?
+    # query = 'Synonyms:_* "Synonyms group:" rated:15'
     # TODO: fix the duplicated groups...
     main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)

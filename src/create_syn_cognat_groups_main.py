@@ -252,6 +252,38 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
     reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag="auto_edited")
 
     logger.success("Done!")
+    return GROUPS
+
+if __name__ == "__main__":
+
+    yaml_file = "src/config.yaml"
+
+    # TODO: Load file name given by user as args
+    groups_file = "groups_ch_syn.json"
+    GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
+
+    # TODO: change get_yaml_value to retrieve all values at once in a method
+    lang = "zh" 
+    try:
+        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
+    except OSError:
+        download_spacy_model(f'{lang}_core_web_md')
+        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
+
+    logger.info("Model loaded")
+    
+    COL_PATH = get_col_path(yaml_file)
+    col = Collection(COL_PATH)
+
+    tag = "syn_created"  # Flags might have been better, but needs to get to the note cards
+    hint_field = "Synonyms"
+    group_name = f"{hint_field} group"
+    main_signification_field = "Simplified"
+    translation_field = "Meaning"
+    original_type_name = "Chinois"
+    group_separator = ", "
+    query = f'-is:new -is:suspended tag:marked -tag:{tag}'
+    GROUPS = generate_groups_ids(GROUPS, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query)
 
     
     now = datetime.now().strftime('%Y%m%d-%H-%M')

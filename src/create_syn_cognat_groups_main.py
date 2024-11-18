@@ -136,7 +136,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.8,tag="auto_edited"):    
+def find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -169,7 +169,7 @@ def find_new_groups(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_
 def download_spacy_model(model_name):
     try:
         # Run the command to download the spaCy model
-        result = subprocess.run(['python', '-m', 'spacy', 'download', model_name], check=True, capture_output=True, text=True)
+        result = subprocess.run(['poetry','run','python', '-m', 'spacy', 'download', model_name], check=True, capture_output=True, text=True)
         print(f"Model {model_name} downloaded successfully.")
         print(result.stdout)
     except subprocess.CalledProcessError as e:

@@ -144,7 +144,7 @@ class NoteFieldsUtils:
 def remove_pos_tags_from_lines(lines: list[str]):
     # TODO: normally, remove/move tags to other field separately from hint generation
     POS_tags = [
-        "ADJ", 	"ADP", 	"PUNCT"
+        "ADJ", "ADJECTIVE",	"ADP", 	"PUNCT"
         "ADV", 	"AUX", 	"SYM"
         "INTJ", 	"CCONJ",
         "NOUN", 	"DET", 	 

@@ -282,6 +282,8 @@ if __name__ == "__main__":
     translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
+
+    # TODO: run with query of Synonyms group not empty to recreate all groups with ID
     query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     GROUPS = generate_groups_ids(GROUPS, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query)
 

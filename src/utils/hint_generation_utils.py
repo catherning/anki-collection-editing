@@ -259,7 +259,7 @@ class HintAdaptor(HintGenerator):
         self.additional_hint_field = additional_hint_field
         self.additional_hint_func = additional_hint_func
         
-    def append_if_not_first_group(self, query, note):
+    def check_append_if_not_first_group(self, query, note):
         if not self.group_separator: # XXX: there's no group separator only for cognats ?
             return self.replace
 
@@ -351,12 +351,13 @@ class HintAdaptor(HintGenerator):
             for el in hint.split("<br>"):
                 print(el)
 
-        override_replace = self.append_if_not_first_group(query, note)
+        keep_user_replace_setting = self.check_append_if_not_first_group(query, note)
 
-        if override_replace:
+        if keep_user_replace_setting:
             note[self.hint_holding_field] = hint
         else:
-            hint = "<br><br>" + hint
+            if note[self.hint_holding_field]!="":
+                hint = "<br><br>" + hint 
             note[self.hint_holding_field] += hint
         return note
 
@@ -396,7 +397,8 @@ class HintAdaptor(HintGenerator):
             )
             notes.append(note)
 
-        logger.info("Confirm the hint generation and save notes ? (Y/n)")
+        if not self.override_confirm:
+            logger.info("Confirm the hint generation and save notes ? (Y/n)")
         if self.override_confirm or input() == "y":
             self.col.update_notes(notes)
             logger.success("New note hints saved in the collection!")

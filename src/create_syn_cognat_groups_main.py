@@ -22,6 +22,7 @@ import subprocess
 # TODO: apply group ID from json file
 
 def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_signification_field):
+    # FIXME: bug when running second time, max group id is wrong
     if len(GROUPS)!=0:
         # TODO: check that last group ID exists indeed in the database
         return max([int(id) for id in GROUPS.keys()]) 
@@ -138,7 +139,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
+def find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -151,13 +152,13 @@ def find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,
             break
 
         close_note = col.get_note(all_deck_notesID[nn_index])
-        g1 = set(note["Synonyms group"].split(","))
-        g2 = set(close_note["Synonyms group"].split(","))
+        g1 = set(note[group_name].split(","))
+        g2 = set(close_note[group_name].split(","))
         if all_deck_notesID[nn_index] not in overall_edited_notes and len(g1.intersection(g2))==0:
             group.add(all_deck_notesID[nn_index])
         elif all_deck_notesID[nn_index] in overall_edited_notes and all_deck_notesID[nn_index]!=noteID: # check que des dup ?
             if len(g1.intersection(g2))!=0 and g1!={""} and g2!={""}:
-                print(note["Synonyms group"],close_note["Synonyms group"])
+                logger.warning(f"2 notes ne peuvent pas être dans 2 mêmes groupes! : {note[group_name]} / {close_note[group_name]}")
                 continue
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
     
@@ -165,6 +166,9 @@ def find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,
         # XXX: what to do when group is of len(1) ? lower the threshold / use english vectors, makes it even more complicated
         group = list(group)
         current_max_id,overall_edited_notes,GROUPS = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS,tag)
+    else:
+        closest_note = col.get_note(all_deck_notesID[nn[0][0]][main_signification_field])
+        logger.warning(f"No synonyms found using vector search! Closest note was {closest_note}")
     return current_max_id,overall_edited_notes,GROUPS
 
 
@@ -202,6 +206,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
             )
     
     # TODO: change get_yaml_value to retrieve all values at once in a method
+    # TODO: change, don't use spacy but LLM embedding, at least to compare...
     try:
         nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
     except OSError:
@@ -221,9 +226,9 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
             # TODO: calculate the average or max or other stat of the distance of words in all the manually created groups to know the threshold   
             if vector_search:
                 logger.warning(f"The note '{note[main_signification_field]}' was already found in a group. Searching new syn/cognats group.")
-                current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
+                current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
             else:
-                logger.info(f"The not '{note[main_signification_field]}' was already found in a group. Doing nothing.")
+                logger.info(f"The note '{note[main_signification_field]}' was already found in a group. Doing nothing.")
         
         # It's a group that I created manually : just need to find the other notes in the group and create the group ID
         elif note[hint_field] and not note[group_name]:
@@ -239,7 +244,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         # It's not in a group yet. I need to find the group using word embeddings
         elif not note[hint_field] and vector_search:
             logger.info(f"Finding synonyms/cognats for '{note[main_signification_field]}' using vector search for new group ID {current_max_id+1}")
-            current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
+            current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
                 
 
         elif note[hint_field] and note[group_name]:

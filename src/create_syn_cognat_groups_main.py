@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from collections import defaultdict
 from typing import Callable, Optional
 from json import dump, load
@@ -14,6 +15,7 @@ from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
 import subprocess
+from pathlib import Path
 # TODO: make as arg
 
 # TODO: method to return the list of groups with main signification summary or an example
@@ -139,7 +141,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.7,tag="auto_edited"):    
+def find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -152,12 +154,18 @@ def find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_significati
             break
 
         close_note = col.get_note(all_deck_notesID[nn_index])
+        if close_note[main_signification_field]==note[main_signification_field]:
+            continue
+
         g1 = set(note[group_name].split(","))
         g2 = set(close_note[group_name].split(","))
+        g1.discard("")
+        g2.discard("")
+        
         if all_deck_notesID[nn_index] not in overall_edited_notes and len(g1.intersection(g2))==0:
             group.add(all_deck_notesID[nn_index])
         elif all_deck_notesID[nn_index] in overall_edited_notes and all_deck_notesID[nn_index]!=noteID: # check que des dup ?
-            if len(g1.intersection(g2))!=0 and g1!={""} and g2!={""}:
+            if len(g1.intersection(g2))!=0:
                 logger.warning(f"2 notes ne peuvent pas être dans 2 mêmes groupes! : {note[group_name]} / {close_note[group_name]}")
                 continue
                 # TODO: 2 notes ne peuvent pas être dans 2 mêmes groupes ! Il faut les fusionner ensemble ou en amont, 
@@ -167,8 +175,9 @@ def find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_significati
         group = list(group)
         current_max_id,overall_edited_notes,GROUPS = update_notes_in_group(col, group_name, group_separator, current_max_id, overall_edited_notes, group,GROUPS,tag)
     else:
-        closest_note = col.get_note(all_deck_notesID[nn[0][0]][main_signification_field])
-        logger.warning(f"No synonyms found using vector search! Closest note was {closest_note}")
+        closest_note = col.get_note(all_deck_notesID[nn[0]])[main_signification_field]
+        closest_note2 = col.get_note(all_deck_notesID[nn[1]])[main_signification_field]
+        logger.warning(f"No synonyms found using vector search! 2 Closest notes were {closest_note} and {closest_note2}")
     return current_max_id,overall_edited_notes,GROUPS
 
 
@@ -181,7 +190,7 @@ def download_spacy_model(model_name):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while downloading the model: {e.stderr}")
 
-def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True):
+def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json"):
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
     current_max_id = get_last_id(col,
                                 original_type_name,
@@ -270,11 +279,11 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
 
     logger.success("Done!")
     now = datetime.now().strftime('%Y%m%d-%H-%M')
-    main_file_name = f"{now}_{groups_file.split('.json')[0]}"
+    main_file_name = f"{now}_{file_name}"
     logger.info(f"Saving in {main_file_name}.json and {main_file_name}_noteview.json")
-    with open(f"{main_file_name}.json", 'w',encoding="utf-8") as f:
+    with open(Path(groups_file.parent,f"{main_file_name}.json"), 'w',encoding="utf-8") as f:
         dump(GROUPS, f,ensure_ascii=False)
-    with open(f"{main_file_name}_noteview.json", 'w',encoding="utf-8") as f:
+    with open(Path(groups_file.parent,f"{main_file_name}_noteview.json"), 'w',encoding="utf-8") as f:
         dump(NOTE_GROUPS, f,ensure_ascii=False)
 
     return GROUPS
@@ -286,9 +295,13 @@ if __name__ == "__main__":
 
     # TODO: Load file name given by user as args
     groups_file = "groups_ch_syn.json"
+    groups_file = max([Path("data",f) for f in os.listdir('data') if f.endswith('.json') and "noteview" not in f], key=os.path.getmtime)
 
     COL_PATH = get_col_path(yaml_file)
     col = Collection(COL_PATH)
+    if "collection.media" in os.getcwd():
+        os.chdir("..")
+
 
     tag = "syn_created"  # Flags might have been better, but needs to get to the note cards
     hint_field = "Synonyms"

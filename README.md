@@ -194,6 +194,7 @@ for group in groups:
 - Improve the search for the synonyms. For now, you need to manually group together (with a tag, flag or a specific enough query to filter only the wanted notes) the notes that are synonyms
     => Automatically create the groups (synonyms or cognats) IDs
 - Clean code by using constants, and following OOP principles?
+- In hindsight : could have make it less dependant on Anki: extract all notes, do the syns gen, hints gen etc to save to file, then research the notes from the file... In order to do that, recreate a similar class to Anki classes (mainly notes)?
 
 ## Contributing
 

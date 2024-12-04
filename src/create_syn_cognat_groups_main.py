@@ -15,7 +15,7 @@ from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
 from src.utils.utils import timeit
 import subprocess
-from pathlib import Path
+from pathlib import Path,PurePath
 # TODO: make as arg
 
 # TODO: method to return the list of groups with main signification summary or an example
@@ -80,7 +80,7 @@ def reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",
     notes = []
     for noteID,group_ids in NOTE_GROUPS.items():
         note = col.get_note(noteID)
-        note[group_name] = group_separator.join([str(group_id) for group_id in group_ids])
+        note[group_name] = group_separator.join([str(group_id) for group_id in group_ids["groups"]])
         note.add_tag(tag)
         notes.append(note)
     col.update_notes(notes)
@@ -270,20 +270,21 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
     
     
     NOTE_GROUPS = defaultdict(lambda: {"text":"","groups":[]})
-    for k,v in GROUPS.items():
-        for noteID in v:
+    for groupID,group_notes in GROUPS.items():
+        for noteID in group_notes:
             NOTE_GROUPS[noteID["id"]]["text"] = noteID["text"]
-            NOTE_GROUPS[noteID["id"]]["groups"].append(k)
+            NOTE_GROUPS[noteID["id"]]["groups"].append(groupID)
     reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag="auto_edited")
     col.close()
 
     logger.success("Done!")
     now = datetime.now().strftime('%Y%m%d-%H-%M')
     main_file_name = f"{now}_{file_name}"
+    save_folder = groups_file.parent if isinstance(groups_file, PurePath) else "data"
     logger.info(f"Saving in {main_file_name}.json and {main_file_name}_noteview.json")
-    with open(Path(groups_file.parent,f"{main_file_name}.json"), 'w',encoding="utf-8") as f:
+    with open(Path(save_folder,f"{main_file_name}.json"), 'w',encoding="utf-8") as f: # TODO: fix when data folder is empty
         dump(GROUPS, f,ensure_ascii=False)
-    with open(Path(groups_file.parent,f"{main_file_name}_noteview.json"), 'w',encoding="utf-8") as f:
+    with open(Path(save_folder,f"{main_file_name}_noteview.json"), 'w',encoding="utf-8") as f:
         dump(NOTE_GROUPS, f,ensure_ascii=False)
 
     return GROUPS
@@ -294,8 +295,7 @@ if __name__ == "__main__":
     yaml_file = "src/config.yaml"
 
     # TODO: Load file name given by user as args
-    groups_file = "groups_ch_syn.json"
-    groups_file = max([Path("data",f) for f in os.listdir('data') if f.endswith('.json') and "noteview" not in f], key=os.path.getmtime)
+    groups_file = max([Path("data",f) for f in os.listdir('data') if f.endswith('.json') and "noteview" not in f], key=os.path.getmtime,default="groups_ch_syn.json")
 
     COL_PATH = get_col_path(yaml_file)
     col = Collection(COL_PATH)

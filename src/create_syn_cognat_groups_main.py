@@ -23,17 +23,45 @@ from pathlib import Path,PurePath
 # TODO: method to clean synonyms field ? when there's a blank line between each line?
 # TODO: apply group ID from json file
 
+
+def get_group_query(query_field,group_separator,group_idroup_id):
+    return f'"{query_field}:re:(^|{group_separator}){group_idroup_id}({group_separator}|$)"'
+
+
+# XXX: where to put the two methods ? new synonyms handling class or field utils or noteutils ? If field utils, then cyclic imports
+def remove_group_range(col,field,note_type_name,range_min,range_max,separator=", "):
+    c_err = 0
+    for group_id in range (range_min, range_max):
+        query = get_group_query(field, separator, group_id)
+        try:
+            notes_id,_ = find_notes(
+                    col,
+                    query=query, # Notes that are potential synonyms/cognats. We search for those that we already learned
+                    note_type_name=note_type_name,
+                    override_confirmation = True,
+                    verbose=1
+                )
+        except ValueError:
+            continue
+        edited_notes = []
+        for noteID in notes_id:
+            note = col.get_note(noteID)
+            groups = note[field].split(separator)
+            groups.remove(str(group_id))
+            note[field] = separator.join(groups)
+            edited_notes.append(note)
+        col.update_notes(edited_notes)
+    logger.info("Groups removed.")
+    col.close()
+
 def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_signification_field):
     # FIXME: bug when running second time, max group id is wrong
     if len(GROUPS)!=0:
         # TODO: check that last group ID exists indeed in the database
         return max([int(id) for id in GROUPS.keys()]) 
-    i=0
+    i=1
     while True:
-        i+=1
-        query = f'"{query_field}:re:(^|{group_separator}){i}({group_separator}|$)"'
-        # query is something like "Synonyms group:re:(^|, )1(, |$)"
-
+        query = get_group_query(query_field, group_separator, i)
         try: 
             notesID, _ = find_notes(
                 col,
@@ -43,6 +71,7 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,main_s
                 override_confirmation = True
             )
             add_group_to_dict(col, GROUPS, main_signification_field, i, notesID)
+            i+=1
         except ValueError:
             return i-1
 
@@ -192,6 +221,7 @@ def download_spacy_model(model_name):
 
 def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json"):
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
+    
     current_max_id = get_last_id(col,
                                 original_type_name,
                                 group_name,
@@ -240,7 +270,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 logger.info(f"The note '{note[main_signification_field]}' was already found in a group. Doing nothing.")
         
         # It's a group that I created manually : just need to find the other notes in the group and create the group ID
-        elif note[hint_field] and not note[group_name]:
+        elif note[hint_field] and (not note[group_name]):
             logger.info(f"Assign group ID {current_max_id+1} for '{note[main_signification_field]}'.")
             hints = note[hint_field].split()
             field_text = note_field_utils.extract_text_from_field(note,hint_field)
@@ -251,12 +281,12 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                     current_max_id,overall_edited_notes,GROUPS = assign_group_id_to_chinese_manual_group(col,GROUPS,noteID,field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes,tag)
 
         # It's not in a group yet. I need to find the group using word embeddings
-        elif not note[hint_field] and vector_search:
+        elif (not note[hint_field]) and (not note[group_name]) and vector_search:
             logger.info(f"Finding synonyms/cognats for '{note[main_signification_field]}' using vector search for new group ID {current_max_id+1}")
             current_max_id,overall_edited_notes,GROUPS = find_new_groups_from_embedding(col,GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,tag=tag)
                 
 
-        elif note[hint_field] and note[group_name]:
+        elif note[group_name]:
             logger.info(f"'{note[main_signification_field]}' already in a group with a group ID.")
             # The group ID is already set, all is well
             # TODO: should I remove the is:suspended ect that are in the query ? bc if rerun, they
@@ -314,4 +344,6 @@ if __name__ == "__main__":
     query = f'-is:new -is:suspended tag:marked -tag:{tag}' # XXX: need -tag ?
     # query = 'Synonyms:_* "Synonyms group:" rated:15'
     # TODO: fix the duplicated groups...
-    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)
+    # main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)
+    # remove_group_range(col,group_name,original_type_name,28,1000,group_separator)
+    

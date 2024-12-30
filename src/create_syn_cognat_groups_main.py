@@ -19,9 +19,9 @@ from pathlib import Path,PurePath
 # TODO: make as arg
 
 # TODO: method to return the list of groups with main signification summary or an example
-# TODO: methods to delete groups, especially starting from a number ?
 # TODO: method to clean synonyms field ? when there's a blank line between each line?
 # TODO: apply group ID from json file
+# TODO: decorréler d'Anki : possibilité de prendre en input fichier csv ou json de vocab ?
 
 
 def get_group_query(query_field,group_separator,group_idroup_id):
@@ -56,10 +56,20 @@ def remove_group_range(col,field,note_type_name,range_min,range_max,separator=",
     col.close()
 
 def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,NOTE_GROUPS,main_signification_field):
-    # FIXME: bug when running second time, max group id is wrong
     if len(GROUPS)!=0:
-        # TODO: check that last group ID exists indeed in the database
-        return max([int(id) for id in GROUPS.keys()]) 
+        max_id = max([int(id) for id in GROUPS.keys()])
+        query = get_group_query(query_field, group_separator, max_id)
+        try: 
+            notesID, _ = find_notes(
+                col,
+                query=query,
+                verbose=0,
+                note_type_name=original_type_name,
+                override_confirmation = True
+            )
+            return max_id
+        except ValueError:
+            raise ValueError("There's a mismatch between provided groups in JSON and in the database.")
     i=1
     while True:
         query = get_group_query(query_field, group_separator, i)
@@ -100,6 +110,7 @@ def get_notes_to_edit(col,original_type_name,query):
             )
 
 def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", ",tag="auto_edited"):
+    # Not used
     notes = []
     for noteID in noteIDs:
         note = col.get_note(noteID)
@@ -146,17 +157,21 @@ def merge_groups(GROUPS,NOTE_GROUPS):
                 g2 = set(note["id"] for note in notes2)
                 if len(g1.intersection(g2))>=3:
                     merged = notes + notes2
-                    NEW_GROUPS[groupID] = list({v['id']:v for v in merged}.values())
-                    del NEW_GROUPS[groupID2]
-                    remove_groups.append(groupID2)
-                    c+=1
+                    new_group = list({v['id']:v for v in merged}.values())
+                    if len(new_group)<=10: # Prevent creating groups with more than 10 elements
+                        NEW_GROUPS[groupID] = list({v['id']:v for v in merged}.values())
+                        del NEW_GROUPS[groupID2]
+                        remove_groups.append(groupID2)
+                        c+=1
+                    else:
+                        logger.info(f"Groups {groupID} and {groupID2} were not merged because it would have more than 10 elements")
 
     #reset id
     NEW_GROUPS = {str(i+1):groups for i,groups in enumerate(NEW_GROUPS.values())}
     logger.info(f"Merged groups {c} times. Now max id is {len(NEW_GROUPS)}")
     
     NOTE_GROUPS = create_note_groups(NEW_GROUPS)
-    return GROUPS, NOTE_GROUPS
+    return NEW_GROUPS, NOTE_GROUPS
 
 def assign_group_id_to_chinese_manual_group(col,GROUPS,NOTE_GROUPS,noteID, field_text, original_type_name, main_signification_field,current_max_id,overall_edited_notes):
     group_elements = re.findall("[\u4e00-\u9FFF]+|\n", field_text)
@@ -207,7 +222,7 @@ def build_index(vector_len,all_vectors):
     return t
 
 # @timeit
-def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=1,tag="auto_edited"):    
+def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.95,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -228,18 +243,20 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
         
         if all_deck_notesID[nn_index] not in overall_edited_notes and len(g1.intersection(g2))==0:
             group.add(all_deck_notesID[nn_index])
-        elif all_deck_notesID[nn_index] in overall_edited_notes: # Close note was already edited
-            if len(g1.intersection(g2))==0: # Close note was already edited and not in the same group
+        elif all_deck_notesID[nn_index] in overall_edited_notes and len(g1.intersection(g2))==0: # Close note was already edited and not in the same group
                 group.add(all_deck_notesID[nn_index])
     
     if len(group)>1:
-        # XXX: what to do when group is of len(1) ? lower the threshold / use english vectors, makes it even more complicated
         group = list(group)
         current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS)
     else:
-        closest_note = col.get_note(all_deck_notesID[nn[0]])[main_signification_field]
         closest_note2 = col.get_note(all_deck_notesID[nn[1]])[main_signification_field]
-        logger.warning(f"No synonyms found using vector search! 2 Closest notes were {closest_note} and {closest_note2}")
+        if distances[1]<1: # TODO: store the threshold in 
+            group.add(all_deck_notesID[1])
+            group = list(group)
+            current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS)
+        else:
+            logger.warning(f"No synonyms found using vector search! Closest note was {closest_note2} with distance {distances[1]}")
     return current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS
 
 
@@ -253,6 +270,7 @@ def download_spacy_model(model_name):
         print(f"Error occurred while downloading the model: {e.stderr}")
 
 def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json"):
+    # what if json file different from Anki col ? 
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
     # TODO: or load from file too ?
     NOTE_GROUPS = create_note_groups(GROUPS)
@@ -265,7 +283,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                                 NOTE_GROUPS=NOTE_GROUPS,
                                 main_signification_field=main_signification_field)
 
-    logger.info(f"Max group ID: {current_max_id+1}")
+    logger.info(f"Max group ID: {current_max_id}")
     overall_edited_notes = set()
     note_field_utils = NoteFieldsUtils(col,original_type_name)
 
@@ -280,7 +298,6 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 verbose=1
             )
     
-    # TODO: change get_yaml_value to retrieve all values at once in a method
     # TODO: change, don't use spacy but LLM embedding, at least to compare...
     try:
         nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
@@ -298,7 +315,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         note = col.get_note(noteID)
 
         if noteID in overall_edited_notes:
-            # TODO: calculate the average or max or other stat of the distance of words in all the manually created groups to know the threshold   
+            # XXX: calculate the average or max or other stat of the distance of words in all the manually created groups to know the threshold   
             if vector_search:
                 logger.warning(f"The note '{note[main_signification_field]}' was already found in a group. Searching new syn/cognats group.")
                 current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID)
@@ -324,9 +341,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
 
         elif note[group_name]:
             logger.info(f"'{note[main_signification_field]}' already in a group with a group ID.")
-            # The group ID is already set, all is well
-            # TODO: should I remove the is:suspended ect that are in the query ? bc if rerun, they
-            # XXX: Because of this elif where I don't do anything, can't find other groups for the note
+            # XXX: Because of this elif where I don't do anything, won't find other groups for the note
                 
         else:
             # What else ? only this case : Not in a group yet but no vector_search ?
@@ -336,7 +351,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
 
     GROUPS,NOTE_GROUPS = merge_groups(GROUPS,NOTE_GROUPS)
     
-    reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag="auto_edited")
+    reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag=tag)
     col.close()
 
     logger.success("Done!")
@@ -344,7 +359,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
     main_file_name = f"{now}_{file_name}"
     save_folder = groups_file.parent if isinstance(groups_file, PurePath) else "data"
     logger.info(f"Saving in {main_file_name}.json and {main_file_name}_noteview.json")
-    with open(Path(save_folder,f"{main_file_name}.json"), 'w',encoding="utf-8") as f: # TODO: fix when data folder is empty
+    with open(Path(save_folder,f"{main_file_name}.json"), 'w',encoding="utf-8") as f:
         dump(GROUPS, f,ensure_ascii=False)
     with open(Path(save_folder,f"{main_file_name}_noteview.json"), 'w',encoding="utf-8") as f:
         dump(NOTE_GROUPS, f,ensure_ascii=False)
@@ -356,7 +371,6 @@ if __name__ == "__main__":
 
     yaml_file = "src/config.yaml"
 
-    # TODO: Load file name given by user as args
     groups_file = max([Path("data",f) for f in os.listdir('data') if f.endswith('.json') and "noteview" not in f], key=os.path.getmtime,default="groups_ch_syn.json")
     print(groups_file)
 
@@ -374,9 +388,9 @@ if __name__ == "__main__":
     original_type_name = "Chinois"
     group_separator = ", "
 
-    query = f'-is:new -is:suspended tag:marked -tag:{tag}' # XXX: need -tag ?
+    query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     # query = 'Synonyms:_* "Synonyms group:" rated:15'
-    # TODO: fix the duplicated groups...
+
     main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)
     # remove_group_range(col,group_name,original_type_name,28,1000,group_separator)
     

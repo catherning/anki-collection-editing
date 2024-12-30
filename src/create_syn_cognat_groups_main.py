@@ -203,15 +203,24 @@ def assign_group_id_to_chinese_manual_group(col,GROUPS,NOTE_GROUPS,noteID, field
             continue
     return current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS  
 
-def get_word_vector(nlp,word):
-    return nlp(word).vector
-
+def get_word_vector(nlp,word,model="spacy"):
+    if model=="spacy":
+        return nlp(word).vector
+    else:
+        return model.encode([word], max_length=256)
+    
 @timeit
-def get_vector_of_notes(nlp,col,notesID,note_field_utils):
-    vectors = []
-    for noteID in notesID:
-        vectors.append(get_word_vector(nlp,note_field_utils.extract_text_from_field(col.get_note(noteID),main_signification_field)))
-    return np.array(vectors)
+def get_vector_of_notes(nlp,col,notesID,note_field_utils,model="spacy"):
+    if model=="spacy":
+        vectors = []
+        for noteID in notesID:
+            vectors.append(get_word_vector(nlp,note_field_utils.extract_text_from_field(col.get_note(noteID),main_signification_field),model))
+        return np.array(vectors)
+    else:
+        embeddings = nlp.encode(
+            [note_field_utils.extract_text_from_field(col.get_note(noteID),main_signification_field) for noteID in notesID],
+        )
+        return embeddings
 
 def build_index(vector_len,all_vectors):
     t = AnnoyIndex(vector_len, 'angular')
@@ -269,7 +278,7 @@ def download_spacy_model(model_name):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while downloading the model: {e.stderr}")
 
-def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json"):
+def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json",model="spacy"):
     # what if json file different from Anki col ? 
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
     # TODO: or load from file too ?
@@ -298,15 +307,20 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 verbose=1
             )
     
-    # TODO: change, don't use spacy but LLM embedding, at least to compare...
-    try:
-        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-    except OSError:
-        download_spacy_model(f'{lang}_core_web_md')
-        nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-    logger.info("Model loaded.")
-    
     if vector_search:
+        if model=="space":
+            # TODO: change, don't use spacy but LLM embedding, at least to compare...
+            try:
+                nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
+            except OSError:
+                download_spacy_model(f'{lang}_core_web_md')
+                nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
+            logger.info("Model loaded.")
+        else:
+            import torch
+            from transformers import AutoModel
+            nlp = AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', trust_remote_code=True, torch_dtype=torch.bfloat16)
+    
         all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils)
         vector_len = len(get_word_vector(nlp,col.get_note(all_deck_notesID[0])[main_signification_field]))
         annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
@@ -387,10 +401,11 @@ if __name__ == "__main__":
     # translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
+    model = "jinaai/jina-embeddings-v2-base-zh"
 
     query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     # query = 'Synonyms:_* "Synonyms group:" rated:15'
 
-    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True)
+    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True,model = model)
     # remove_group_range(col,group_name,original_type_name,28,1000,group_separator)
     

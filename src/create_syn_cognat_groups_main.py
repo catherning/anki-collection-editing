@@ -235,16 +235,15 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
     # most_similar = nlp.vocab.vectors.most_similar(vectors, n=10)
-    note = col.get_note(noteID)
+    
+    # note = col.get_note(noteID)
     nn,distances = annoy_index.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
+    nn,distances = nn[1:],distances[1:] # remove the first element which is the note itself
+    # logger.debug(f"Average distance of 15 closest notes: {np.mean(distances):.2f}, all distances: {[round(el,2) for el in distances]}")
     group = {noteID}
     for nn_index,distance in zip(nn,distances):
-        if distance>distance_threshold:
+        if distance>distance_threshold: # todo calc threshold dynamically, depending on model ?
             break
-
-        close_note = col.get_note(all_deck_notesID[nn_index])
-        if close_note[main_signification_field]==note[main_signification_field]:
-            continue
 
         g1 = set(NOTE_GROUPS[noteID]["groups"])
         g2 = set(NOTE_GROUPS[all_deck_notesID[nn_index]]["groups"])
@@ -259,7 +258,7 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
         current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS)
     else:
         closest_note2 = col.get_note(all_deck_notesID[nn[1]])[main_signification_field]
-        if distances[1]<1: # TODO: store the threshold in 
+        if distances[1]<1: # TODO: store the threshold in variable
             group.add(all_deck_notesID[1])
             group = list(group)
             current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS)
@@ -277,7 +276,7 @@ def download_spacy_model(model_name):
     except subprocess.CalledProcessError as e:
         print(f"Error occurred while downloading the model: {e.stderr}")
 
-def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,lang="zh",vector_search=True,file_name="groups_ch_syn.json",model="spacy"):
+def main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,search_space_query="-is:new",lang="zh",vector_search=True,file_name="groups_ch_syn.json",lib="spacy",model="spacy"):
     # what if json file different from Anki col ? 
     GROUPS = dict(load(open(groups_file, 'rb'))) if path.exists(groups_file) else dict()
     # TODO: or load from file too ?
@@ -298,30 +297,36 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
     notesID, _ = get_notes_to_edit(col,original_type_name,query)
 
     logger.info("Finding all notes of the same type.")
+    
+    # if model!="spacy", too long, should shorten then search space
     all_deck_notesID,_ = find_notes(
                 col,
-                query="-is:new", # Notes that are potential synonyms/cognats. We search for those that we already learned
+                query=search_space_query, # Notes that are potential synonyms/cognats. We search for those that we already learned
                 note_type_name=original_type_name,
                 override_confirmation = True,
                 verbose=1
             )
     if vector_search:
-        if model=="spacy":
-            import spacy
-            # TODO: change, don't use spacy but LLM embedding, at least to compare...
-            try:
-                nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-            except OSError:
-                download_spacy_model(f'{lang}_core_web_md')
-                nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
-            logger.info("Model loaded.")
-        else:
-            from torch import bfloat16
-            from transformers import AutoModel
-            nlp = AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', trust_remote_code=True, torch_dtype=bfloat16)
+        match lib:
+            case "spacy":
+                import spacy
+                # TODO: change, don't use spacy but LLM embedding, at least to compare...
+                try:
+                    nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"]) # only tok2vec
+                except OSError:
+                    download_spacy_model(f'{lang}_core_web_md')
+                    nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"]) # only tok2vec
+            case "transformers":
+                from torch import bfloat16
+                from transformers import AutoModel
+                nlp = AutoModel.from_pretrained(model, trust_remote_code=True, torch_dtype=bfloat16)
+            case "sentence_transformer":
+                from sentence_transformers import SentenceTransformer
+                nlp = SentenceTransformer(model)
+        logger.info("Model loaded.")
     
-        all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils)
-        vector_len = len(get_word_vector(nlp,col.get_note(all_deck_notesID[0])[main_signification_field]))
+        all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils,model=model)
+        vector_len = all_vectors.shape[1]
         annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
 
     for noteID in notesID:
@@ -400,11 +405,12 @@ if __name__ == "__main__":
     # translation_field = "Meaning"
     original_type_name = "Chinois"
     group_separator = ", "
-    model = "jinaai/jina-embeddings-v2-base-zh"
+    model = 'BAAI/bge-small-zh-v1.5'
+    lib="sentence_transformer"
 
     query = f'-is:new -is:suspended tag:marked -tag:{tag}'
     # query = 'Synonyms:_* "Synonyms group:" rated:15'
 
-    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,vector_search=True,model = model)
+    main(groups_file, col, tag, hint_field, group_name, main_signification_field, original_type_name, group_separator, query,search_space_query="-is:new",vector_search=True,lib=lib,model = model)
     # remove_group_range(col,group_name,original_type_name,28,1000,group_separator)
     

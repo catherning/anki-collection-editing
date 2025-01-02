@@ -9,7 +9,6 @@ from langdetect import detect
 import re
 from datetime import datetime
 from os import path
-import spacy
 from annoy import AnnoyIndex 
 from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
@@ -306,9 +305,9 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 override_confirmation = True,
                 verbose=1
             )
-    
     if vector_search:
-        if model=="space":
+        if model=="spacy":
+            import spacy
             # TODO: change, don't use spacy but LLM embedding, at least to compare...
             try:
                 nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
@@ -317,9 +316,9 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"])
             logger.info("Model loaded.")
         else:
-            import torch
+            from torch import bfloat16
             from transformers import AutoModel
-            nlp = AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', trust_remote_code=True, torch_dtype=torch.bfloat16)
+            nlp = AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', trust_remote_code=True, torch_dtype=bfloat16)
     
         all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils)
         vector_len = len(get_word_vector(nlp,col.get_note(all_deck_notesID[0])[main_signification_field]))

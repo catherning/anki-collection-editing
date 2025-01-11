@@ -18,10 +18,10 @@ from pathlib import Path,PurePath
 # TODO: make as arg
 
 # TODO: method to return the list of groups with main signification summary or an example
-# TODO: method to clean synonyms field ? when there's a blank line between each line?
+# TODO: method to clean synonyms field ? when there's a blank line between each line
 # TODO: apply group ID from json file
 # TODO: decorréler d'Anki : possibilité de prendre en input fichier csv ou json de vocab ?
-
+# TODO: find synonyms using (hierarchical) clustering of word embedding?
 
 def get_group_query(query_field,group_separator,group_idroup_id):
     # Query like "Synonyms group:re:(^|, )1(, |$)"
@@ -154,16 +154,17 @@ def merge_groups(GROUPS,NOTE_GROUPS):
             if groupID2 != groupID and groupID2 not in remove_groups:
                 g1 = set(note["id"] for note in notes)
                 g2 = set(note["id"] for note in notes2)
-                if len(g1.intersection(g2))>=3:
+                common_words = len(g1.intersection(g2))
+                if common_words>=3:
                     merged = notes + notes2
                     new_group = list({v['id']:v for v in merged}.values())
-                    if len(new_group)<=10: # Prevent creating groups with more than 10 elements
+                    if len(new_group)<=10 or (common_words>=4): # Prevent creating groups with more than 10 elements
                         NEW_GROUPS[groupID] = list({v['id']:v for v in merged}.values())
                         del NEW_GROUPS[groupID2]
                         remove_groups.append(groupID2)
                         c+=1
                     else:
-                        logger.info(f"Groups {groupID} and {groupID2} were not merged because it would have more than 10 elements")
+                        logger.info(f"Groups {groupID} and {groupID2} were not merged because it would have more than 10 elements. Common words: {common_words}")
 
     #reset id
     NEW_GROUPS = {str(i+1):groups for i,groups in enumerate(NEW_GROUPS.values())}
@@ -229,8 +230,16 @@ def build_index(vector_len,all_vectors):
     # t.save('chinese.ann')
     return t
 
+@timeit
+def calc_all_dist(annoy_index,nb_vector):
+    all_dist = []
+    for i in range(nb_vector):
+        for j in range(i+1,nb_vector):
+                all_dist.append(annoy_index.get_distance(i,j))
+    return all_dist
+
 # @timeit
-def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.95,tag="auto_edited"):    
+def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
     # XXX: not perfect : it necessarily gives a new group. Could have included to an existing group...
     # or use https://github.com/explosion/spaCy/discussions/10465 most_similar, but then must use same logic as in commit 39f1f962fead7de0c48edbb76d36bef941a68728 : check if sim words are in anki
     # but it would do all notesID at once
@@ -239,7 +248,7 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
     # note = col.get_note(noteID)
     nn,distances = annoy_index.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
     nn,distances = nn[1:],distances[1:] # remove the first element which is the note itself
-    # logger.debug(f"Average distance of 15 closest notes: {np.mean(distances):.2f}, all distances: {[round(el,2) for el in distances]}")
+    logger.debug(f"Average distance of 15 closest notes: {np.mean(distances):.2f}, all distances: {[round(el,2) for el in distances]}")
     group = {noteID}
     for nn_index,distance in zip(nn,distances):
         if distance>distance_threshold: # todo calc threshold dynamically, depending on model ?
@@ -310,7 +319,6 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         match lib:
             case "spacy":
                 import spacy
-                # TODO: change, don't use spacy but LLM embedding, at least to compare...
                 try:
                     nlp = spacy.load(f'{lang}_core_web_md', exclude=["ner","tagger","parser","senter","attribute_ruler"]) # only tok2vec
                 except OSError:
@@ -326,8 +334,13 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         logger.info("Model loaded.")
     
         all_vectors = get_vector_of_notes(nlp,col,all_deck_notesID,note_field_utils,model=model)
-        vector_len = all_vectors.shape[1]
+        nb_vector, vector_len = all_vectors.shape
         annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
+
+        
+        all_dist = calc_all_dist(annoy_index,nb_vector)
+
+        logger.debug(f"Average distance between all notes: {np.mean(all_dist):.2f}")
 
     for noteID in notesID:
         note = col.get_note(noteID)

@@ -60,6 +60,7 @@ class NoteFieldsUtils:
         Returns:
         None
         """
+        # XXX: only method really usig the col attribute, others using note directly could have a dict as input, not correlated to anki
         if not self.check_field_exists(field_name):
             logger.info(f"Creating new field {field_name} to the note type.")
             fieldDict = self.col.models.new_field(field_name)

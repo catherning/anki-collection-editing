@@ -1,3 +1,4 @@
+# from doctest import debug
 import numpy as np
 import os
 from collections import defaultdict
@@ -7,7 +8,9 @@ from anki.collection import Collection
 from loguru import logger
 from langdetect import detect
 import re
+import sys
 from datetime import datetime
+from scipy.sparse import lil_array, csr_matrix
 from os import path
 from annoy import AnnoyIndex 
 from src.utils.note_utils import find_notes, get_col_path
@@ -22,6 +25,17 @@ from pathlib import Path,PurePath
 # TODO: apply group ID from json file
 # TODO: decorréler d'Anki : possibilité de prendre en input fichier csv ou json de vocab ?
 # TODO: find synonyms using (hierarchical) clustering of word embedding?
+
+# TODO: fix this, can't find debug mode : because python3.12, works in 3.11 ?
+gettrace = getattr(sys, "gettrace", None)
+debug_mode = False
+if gettrace is None:
+    logger.warning("No sys.gettrace")
+elif gettrace():
+    logger.info("Debug mode")
+    debug_mode = True
+else:
+    logger.info("Running mode")
 
 def get_group_query(query_field,group_separator,group_idroup_id):
     # Query like "Synonyms group:re:(^|, )1(, |$)"
@@ -71,6 +85,7 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,NOTE_G
             raise ValueError("There's a mismatch between provided groups in JSON and in the database.")
     i=1
     while True:
+        # XXX: Could just use max if using csv or pandas struct 
         query = get_group_query(query_field, group_separator, i)
         try: 
             notesID, _ = find_notes(
@@ -86,6 +101,7 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,NOTE_G
             return i-1
 
 def add_group_to_dict(col, GROUPS,NOTE_GROUPS, main_signification_field, group_id, notesID):
+    # XXX: could do without col, but with pandas or dict struct
     notes_info = []
     for noteID in notesID:
         note = col.get_note(noteID)
@@ -108,18 +124,6 @@ def get_notes_to_edit(col,original_type_name,query):
                 override_confirmation = True
             )
 
-def assign_group_id(col,noteIDs,group_name,group_id, group_separator = ", ",tag="auto_edited"):
-    # Not used
-    notes = []
-    for noteID in noteIDs:
-        note = col.get_note(noteID)
-        if note[group_name]:
-            note[group_name] += group_separator
-        note[group_name] += str(group_id)
-        note.add_tag(tag)
-        notes.append(note)
-    col.update_notes(notes)
-
 def reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag="auto_edited"):
     notes = []
     for noteID,group_ids in NOTE_GROUPS.items():
@@ -130,9 +134,9 @@ def reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",
     col.update_notes(notes)
 
 def update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS):
+    # XXX: could do without col, but with pandas or dict struct
     current_max_id += 1
     GROUPS,NOTE_GROUPS = add_group_to_dict(col, GROUPS, NOTE_GROUPS, main_signification_field, current_max_id, group)
-    # assign_group_id(col,group,group_name,current_max_id, group_separator,tag="auto_edited")
     overall_edited_notes.update(group)
     return current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS
 
@@ -211,6 +215,7 @@ def get_word_vector(nlp,word,model="spacy"):
     
 @timeit
 def get_vector_of_notes(nlp,col,notesID,note_field_utils,model="spacy"):
+    # XXX: could do without col, but with pandas or dict struct
     if model=="spacy":
         vectors = []
         for noteID in notesID:
@@ -231,12 +236,30 @@ def build_index(vector_len,all_vectors):
     return t
 
 @timeit
-def calc_all_dist(annoy_index,nb_vector):
-    all_dist = []
-    for i in range(nb_vector):
-        for j in range(i+1,nb_vector):
-                all_dist.append(annoy_index.get_distance(i,j))
-    return all_dist
+def calc_group_dist(annoy_index,index_list):
+    n_items= annoy_index.get_n_items()
+    dist_array = lil_array((n_items,n_items))
+    for i, index in enumerate(index_list):
+        for index2 in index_list[i+1:]:
+                dist_array[index,index2] = annoy_index.get_distance(index,index2)
+    return csr_matrix(dist_array)
+
+def calc_sparse_row_mean(dist_array):
+    return dist_array.sum(axis=1).A1/dist_array.getnnz(axis=1)
+
+def calc_sparse_mean(dist_array):
+    return dist_array.sum()/dist_array.getnnz()
+
+def remove_group_outliers(annoy_index, all_deck_notesID, GROUPS,NOTE_GROUPS):
+    for groupID,notes in GROUPS.items():
+        g = [all_deck_notesID.index(note["id"]) for note in notes]
+        if len(g)>=10:
+            dist_array = calc_group_dist(annoy_index,g)
+            mean = calc_sparse_mean(dist_array)
+            mean = calc_sparse_row_mean(dist_array)
+            pass
+
+                
 
 # @timeit
 def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
@@ -245,7 +268,7 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
     # but it would do all notesID at once
     # most_similar = nlp.vocab.vectors.most_similar(vectors, n=10)
     
-    # note = col.get_note(noteID)
+    # XXX: could do without col, but with pandas or dict struct
     nn,distances = annoy_index.get_nns_by_item(all_deck_notesID.index(noteID), 15,include_distances=True)
     nn,distances = nn[1:],distances[1:] # remove the first element which is the note itself
     logger.debug(f"Average distance of 15 closest notes: {np.mean(distances):.2f}, all distances: {[round(el,2) for el in distances]}")
@@ -266,7 +289,7 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
         group = list(group)
         current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS = update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUPS,NOTE_GROUPS)
     else:
-        closest_note2 = col.get_note(all_deck_notesID[nn[1]])[main_signification_field]
+        closest_note2 = col.get_note(all_deck_notesID[nn[1]])[main_signification_field]     # XXX: could do without col, but with pandas or dict struct
         if distances[1]<1: # TODO: store the threshold in variable
             group.add(all_deck_notesID[1])
             group = list(group)
@@ -315,6 +338,10 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 override_confirmation = True,
                 verbose=1
             )
+    # if debug_mode:
+    all_deck_notesID = all_deck_notesID[:1000]
+    logger.debug("Debug mode: only 1000 notes will be used.")
+
     if vector_search:
         match lib:
             case "spacy":
@@ -338,9 +365,8 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
         annoy_index = build_index(vector_len=vector_len,all_vectors=all_vectors)
 
         
-        all_dist = calc_all_dist(annoy_index,nb_vector)
-
-        logger.debug(f"Average distance between all notes: {np.mean(all_dist):.2f}")
+        all_dist = calc_group_dist(annoy_index,index_list=range(nb_vector))
+        logger.debug(f"Average distance between all notes: {calc_sparse_mean(all_dist):.2f}")
 
     for noteID in notesID:
         note = col.get_note(noteID)
@@ -379,7 +405,8 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
             logger.warning(f"What's happening for '{note[main_signification_field]}'?")
             breakpoint()
             pass
-
+    
+    GROUPS,NOTE_GROUPS = remove_group_outliers(annoy_index, all_deck_notesID, GROUPS,NOTE_GROUPS)
     GROUPS,NOTE_GROUPS = merge_groups(GROUPS,NOTE_GROUPS)
     
     reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",tag=tag)

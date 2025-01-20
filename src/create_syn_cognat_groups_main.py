@@ -2,7 +2,9 @@
 import numpy as np
 import os
 from collections import defaultdict
+from statistics import median, StatisticsError
 from typing import Callable, Optional
+import uuid
 from json import dump, load
 from anki.collection import Collection
 from loguru import logger
@@ -15,7 +17,7 @@ from os import path
 from annoy import AnnoyIndex 
 from src.utils.note_utils import find_notes, get_col_path
 from src.utils.field_utils import NoteFieldsUtils
-from src.utils.utils import timeit
+from src.utils.utils import timeit, is_debug_mode
 import subprocess
 from pathlib import Path,PurePath
 # TODO: make as arg
@@ -27,15 +29,8 @@ from pathlib import Path,PurePath
 # TODO: find synonyms using (hierarchical) clustering of word embedding?
 
 # TODO: fix this, can't find debug mode : because python3.12, works in 3.11 ?
-gettrace = getattr(sys, "gettrace", None)
-debug_mode = False
-if gettrace is None:
-    logger.warning("No sys.gettrace")
-elif gettrace():
-    logger.info("Debug mode")
-    debug_mode = True
-else:
-    logger.info("Running mode")
+
+debug_mode = is_debug_mode(logger)
 
 def get_group_query(query_field,group_separator,group_idroup_id):
     # Query like "Synonyms group:re:(^|, )1(, |$)"
@@ -103,14 +98,15 @@ def get_last_id(col,original_type_name,query_field,group_separator,GROUPS,NOTE_G
 def add_group_to_dict(col, GROUPS,NOTE_GROUPS, main_signification_field, group_id, notesID):
     # XXX: could do without col, but with pandas or dict struct
     notes_info = []
+    unique_id = uuid.uuid4().int
     for noteID in notesID:
         note = col.get_note(noteID)
         notes_info.append({"id":noteID,
                            "text":note[main_signification_field]})
         NOTE_GROUPS[noteID]["text"] = note[main_signification_field]
-        NOTE_GROUPS[noteID]["groups"].append(group_id)
+        NOTE_GROUPS[noteID]["groups"].append((group_id,unique_id))
 
-    GROUPS[str(group_id)] = notes_info
+    GROUPS[str(group_id)] = {"unique_id":unique_id, "notes":notes_info}
 
     return GROUPS,NOTE_GROUPS
 
@@ -128,7 +124,7 @@ def reversed_assign_group_id(col,group_name,NOTE_GROUPS, group_separator = ", ",
     notes = []
     for noteID,group_ids in NOTE_GROUPS.items():
         note = col.get_note(noteID)
-        note[group_name] = group_separator.join([str(group_id) for group_id in group_ids["groups"]])
+        note[group_name] = group_separator.join([str(group_id[0]) for group_id in group_ids["groups"]]) # XXX: Add unique_id to Anki note ?
         note.add_tag(tag)
         notes.append(note)
     col.update_notes(notes)
@@ -140,12 +136,13 @@ def update_notes_in_group(col, current_max_id, overall_edited_notes, group,GROUP
     overall_edited_notes.update(group)
     return current_max_id,overall_edited_notes,GROUPS,NOTE_GROUPS
 
-def create_note_groups(GROUPS):
+def create_note_groups(GROUPS):# -> defaultdict[Any, dict[str, str | list[Any]]]:
     NOTE_GROUPS = defaultdict(lambda: {"text":"","groups":[]})
-    for groupID,group_notes in GROUPS.items():
-        for id in group_notes:
-            NOTE_GROUPS[id["id"]]["text"] = id["text"]
-            NOTE_GROUPS[id["id"]]["groups"].append(groupID)
+    for groupID,group_info in GROUPS.items():
+        unique_id = group_info[0]
+        for note in group_info[1]:
+            NOTE_GROUPS[note["id"]]["text"] = note["text"]
+            NOTE_GROUPS[note["id"]]["groups"].append((groupID,unique_id))
     return NOTE_GROUPS
 
 
@@ -153,9 +150,10 @@ def merge_groups(GROUPS,NOTE_GROUPS):
     NEW_GROUPS = {**GROUPS}
     c = 0
     remove_groups = []
+    new_groups_id_mapping = {i+1:i+1 for i in range(len(NEW_GROUPS))}
     for groupID,notes in GROUPS.items():
         for groupID2,notes2 in GROUPS.items():
-            if groupID2 != groupID and groupID2 not in remove_groups:
+            if groupID2 > groupID and groupID2 not in remove_groups:
                 g1 = set(note["id"] for note in notes)
                 g2 = set(note["id"] for note in notes2)
                 common_words = len(g1.intersection(g2))
@@ -163,12 +161,13 @@ def merge_groups(GROUPS,NOTE_GROUPS):
                     merged = notes + notes2
                     new_group = list({v['id']:v for v in merged}.values())
                     if len(new_group)<=10 or (common_words>=4): # Prevent creating groups with more than 10 elements
-                        NEW_GROUPS[groupID] = list({v['id']:v for v in merged}.values())
+                        NEW_GROUPS[groupID] = list({v['id']:v for v in merged}.values()) # TODO: add unique_id to NEW_GROUPS
                         del NEW_GROUPS[groupID2]
                         remove_groups.append(groupID2)
+                        new_groups_id_mapping = {i:j for i,j in new_groups_id_mapping.items() if j }
                         c+=1
                     else:
-                        logger.info(f"Groups {groupID} and {groupID2} were not merged because it would have more than 10 elements. Common words: {common_words}")
+                        logger.debug(f"Groups {groupID} and {groupID2} were not merged because it would have more than 10 elements. Common words: {common_words}")
 
     #reset id
     NEW_GROUPS = {str(i+1):groups for i,groups in enumerate(NEW_GROUPS.values())}
@@ -245,21 +244,47 @@ def calc_group_dist(annoy_index,index_list):
     return csr_matrix(dist_array)
 
 def calc_sparse_row_mean(dist_array):
-    return dist_array.sum(axis=1).A1/dist_array.getnnz(axis=1)
+    a = dist_array.sum(axis=1).A1
+    return np.divide(dist_array.sum(axis=1).A1,dist_array.getnnz(axis=1), out=a,where=dist_array.getnnz(axis=1)!=0)
 
 def calc_sparse_mean(dist_array):
     return dist_array.sum()/dist_array.getnnz()
 
+def remove_outliers_from(list):
+    m = median([el for el in list if el!=0])
+    try:
+        q1 = median([el for el in list if el <= m and el!=0])
+    except StatisticsError:
+        # No values below median. Can be the case if there are many equal values and only a few above it
+        q1 = m
+    try:
+        q3 = median([el for el in list if el >= m])
+    except StatisticsError:
+        # No values above median. Can be the case if there are many equal values and only a few below it
+        q3 = m
+    iqr = q3 - q1
+    outliers_index = [i for i,el in enumerate(list) if el > q3 + (iqr * 1.02)]
+    if not outliers_index:
+        return [list.argmax()]
+    return outliers_index
+    
+
 def remove_group_outliers(annoy_index, all_deck_notesID, GROUPS,NOTE_GROUPS):
+    # TODO: adapt code with unique_id
     for groupID,notes in GROUPS.items():
-        g = [all_deck_notesID.index(note["id"]) for note in notes]
+        g = [all_deck_notesID.index(note["id"]) for note in notes if note["id"] in all_deck_notesID] # else sûrement groupe créé sans vector search
         if len(g)>=10:
             dist_array = calc_group_dist(annoy_index,g)
-            mean = calc_sparse_mean(dist_array)
-            mean = calc_sparse_row_mean(dist_array)
-            pass
-
-                
+            # overall_mean = calc_sparse_mean(dist_array)
+            mean_array = calc_sparse_row_mean(dist_array)
+            outliers_index = remove_outliers_from(mean_array)
+            outliers_nID = [all_deck_notesID[el] for el in outliers_index]
+            GROUPS[groupID] =  [el for el in notes if el["id"] not in outliers_nID] 
+            logger.debug(f"Removing notes {[el["text"] for el in notes if el["id"] in outliers_nID]} from group {groupID}")
+    
+    NOTE_GROUPS = create_note_groups(GROUPS)
+    return GROUPS, NOTE_GROUPS
+  
 
 # @timeit
 def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main_signification_field,current_max_id,annoy_index,overall_edited_notes,all_deck_notesID,distance_threshold=0.9,tag="auto_edited"):    
@@ -276,7 +301,8 @@ def find_new_groups_from_embedding(col,GROUPS,NOTE_GROUPS,noteID,group_name,main
     for nn_index,distance in zip(nn,distances):
         if distance>distance_threshold: # todo calc threshold dynamically, depending on model ?
             break
-
+        
+        # TODO: adapt code with unique_id
         g1 = set(NOTE_GROUPS[noteID]["groups"])
         g2 = set(NOTE_GROUPS[all_deck_notesID[nn_index]]["groups"])
         
@@ -330,7 +356,7 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
 
     logger.info("Finding all notes of the same type.")
     
-    # if model!="spacy", too long, should shorten then search space
+    # if model!="spacy", too long, should shorten the search space
     all_deck_notesID,_ = find_notes(
                 col,
                 query=search_space_query, # Notes that are potential synonyms/cognats. We search for those that we already learned
@@ -338,9 +364,9 @@ def main(groups_file, col, tag, hint_field, group_name, main_signification_field
                 override_confirmation = True,
                 verbose=1
             )
-    # if debug_mode:
-    all_deck_notesID = all_deck_notesID[:1000]
-    logger.debug("Debug mode: only 1000 notes will be used.")
+    if debug_mode:
+        all_deck_notesID = list(set(all_deck_notesID[:1000]).union(notesID))
+        logger.debug("Debug mode: only 1000 notes will be used.")
 
     if vector_search:
         match lib:
